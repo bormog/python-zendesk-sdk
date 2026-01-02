@@ -1,7 +1,7 @@
 """Configuration management for Zendesk SDK."""
 
 import os
-from typing import Any, Optional
+from typing import Any
 
 from pydantic import BaseModel, Field, computed_field, field_validator
 
@@ -10,7 +10,7 @@ class ZendeskConfig(BaseModel):
     """Configuration for Zendesk API client.
 
     This class handles authentication and connection settings for the Zendesk API.
-    It supports both email/password and email/token authentication methods.
+    It uses email/token authentication method.
     Environment variables can be used for configuration.
     """
 
@@ -24,13 +24,10 @@ class ZendeskConfig(BaseModel):
         description="User email for authentication",
         min_length=1,
     )
-    password: Optional[str] = Field(
-        default=None,
-        description="User password (for email/password auth)",
-    )
-    token: Optional[str] = Field(
-        default=None,
-        description="API token (for email/token auth)",
+    token: str = Field(
+        ...,
+        description="API token for authentication",
+        min_length=1,
     )
     timeout: float = Field(
         default=30.0,
@@ -49,8 +46,6 @@ class ZendeskConfig(BaseModel):
             data["subdomain"] = os.getenv("ZENDESK_SUBDOMAIN", data.get("subdomain"))
         if "email" not in data:
             data["email"] = os.getenv("ZENDESK_EMAIL", data.get("email"))
-        if "password" not in data:
-            data["password"] = os.getenv("ZENDESK_PASSWORD", data.get("password"))
         if "token" not in data:
             data["token"] = os.getenv("ZENDESK_TOKEN", data.get("token"))
 
@@ -72,13 +67,6 @@ class ZendeskConfig(BaseModel):
             raise ValueError("Subdomain can only contain letters, numbers, hyphens and underscores")
         return v.lower()
 
-    def model_post_init(self, __context: Any) -> None:
-        """Validate that either password or token is provided."""
-        if not self.password and not self.token:
-            raise ValueError("Either password or token must be provided")
-        if self.password and self.token:
-            raise ValueError("Cannot provide both password and token")
-
     @computed_field  # type: ignore[prop-decorator]
     @property
     def endpoint(self) -> str:
@@ -89,15 +77,7 @@ class ZendeskConfig(BaseModel):
     @property
     def auth_tuple(self) -> tuple[str, str]:
         """Generate authentication tuple for HTTP requests."""
-        if self.token:
-            return (f"{self.email}/token", self.token)
-        return (self.email, self.password or "")
-
-    @computed_field  # type: ignore[prop-decorator]
-    @property
-    def auth_type(self) -> str:
-        """Return the authentication type being used."""
-        return "token" if self.token else "password"
+        return (f"{self.email}/token", self.token)
 
     def __repr__(self) -> str:
         """String representation without exposing credentials."""
@@ -105,7 +85,6 @@ class ZendeskConfig(BaseModel):
             f"ZendeskConfig("
             f"subdomain='{self.subdomain}', "
             f"email='{self.email}', "
-            f"auth_type='{self.auth_type}', "
             f"timeout={self.timeout}, "
             f"max_retries={self.max_retries})"
         )
