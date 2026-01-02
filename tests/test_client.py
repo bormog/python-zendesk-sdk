@@ -330,6 +330,296 @@ class TestZendeskClientAPIReadMethods:
             assert result[1].body == "Second comment"
             mock_get.assert_called_once_with("tickets/789/comments.json", params={"per_page": 20})
 
+    @pytest.mark.asyncio
+    async def test_add_ticket_comment_default_private(self):
+        """Test add_ticket_comment method creates private comment by default."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 789,
+                "subject": "Test Ticket",
+                "status": "open",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.add_ticket_comment(789, "Internal note")
+
+            assert isinstance(result, Ticket)
+            assert result.id == 789
+            mock_put.assert_called_once_with(
+                "tickets/789.json",
+                json={"ticket": {"comment": {"body": "Internal note", "public": False}}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_add_ticket_comment_public(self):
+        """Test add_ticket_comment method with explicit public=True."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 789,
+                "subject": "Test Ticket",
+                "status": "open",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.add_ticket_comment(789, "Thanks for contacting us!", public=True)
+
+            assert isinstance(result, Ticket)
+            mock_put.assert_called_once_with(
+                "tickets/789.json",
+                json={"ticket": {"comment": {"body": "Thanks for contacting us!", "public": True}}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_add_ticket_comment_with_author(self):
+        """Test add_ticket_comment method with custom author."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 789,
+                "subject": "Test Ticket",
+                "status": "open",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.add_ticket_comment(789, "Comment", author_id=456)
+
+            assert isinstance(result, Ticket)
+            mock_put.assert_called_once_with(
+                "tickets/789.json",
+                json={"ticket": {"comment": {"body": "Comment", "public": False, "author_id": 456}}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_make_comment_private(self):
+        """Test make_comment_private method."""
+        client = self.get_client()
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = {}
+
+            result = await client.make_comment_private(789, 111)
+
+            assert result is True
+            mock_put.assert_called_once_with("tickets/789/comments/111/make_private.json")
+
+    @pytest.mark.asyncio
+    async def test_redact_comment_string(self):
+        """Test redact_comment_string method."""
+        client = self.get_client()
+        comment_data = {
+            "comment": {
+                "id": 111,
+                "body": "My card is ▇▇▇▇",
+                "author_id": 123,
+                "public": True,
+                "created_at": "2023-01-01T12:00:00Z",
+            }
+        }
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = comment_data
+
+            result = await client.redact_comment_string(789, 111, "4111-1111-1111-1111")
+
+            assert isinstance(result, Comment)
+            assert result.id == 111
+            assert "▇▇▇▇" in result.body
+            mock_put.assert_called_once_with(
+                "tickets/789/comments/111/redact.json",
+                json={"text": "4111-1111-1111-1111"},
+            )
+
+    # Tags API tests
+
+    @pytest.mark.asyncio
+    async def test_get_ticket_tags(self):
+        """Test get_ticket_tags method."""
+        client = self.get_client()
+        tags_data = {"tags": ["urgent", "vip", "billing"]}
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = tags_data
+
+            result = await client.get_ticket_tags(789)
+
+            assert result == ["urgent", "vip", "billing"]
+            mock_get.assert_called_once_with("tickets/789/tags.json")
+
+    @pytest.mark.asyncio
+    async def test_get_ticket_tags_empty(self):
+        """Test get_ticket_tags method with no tags."""
+        client = self.get_client()
+        tags_data = {"tags": []}
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = tags_data
+
+            result = await client.get_ticket_tags(789)
+
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_add_ticket_tags(self):
+        """Test add_ticket_tags method adds tags without removing existing."""
+        client = self.get_client()
+        tags_data = {"tags": ["existing", "urgent", "vip"]}
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = tags_data
+
+            result = await client.add_ticket_tags(789, ["urgent", "vip"])
+
+            assert result == ["existing", "urgent", "vip"]
+            mock_put.assert_called_once_with(
+                "tickets/789/tags.json",
+                json={"tags": ["urgent", "vip"]},
+            )
+
+    @pytest.mark.asyncio
+    async def test_set_ticket_tags(self):
+        """Test set_ticket_tags method replaces all tags."""
+        client = self.get_client()
+        tags_data = {"tags": ["new1", "new2"]}
+
+        with patch.object(client, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = tags_data
+
+            result = await client.set_ticket_tags(789, ["new1", "new2"])
+
+            assert result == ["new1", "new2"]
+            mock_post.assert_called_once_with(
+                "tickets/789/tags.json",
+                json={"tags": ["new1", "new2"]},
+            )
+
+    @pytest.mark.asyncio
+    async def test_remove_ticket_tags(self):
+        """Test remove_ticket_tags method removes specific tags."""
+        client = self.get_client()
+        tags_data = {"tags": ["remaining"]}
+
+        with patch.object(client.http_client, "delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = tags_data
+
+            result = await client.remove_ticket_tags(789, ["to_remove"])
+
+            assert result == ["remaining"]
+            mock_delete.assert_called_once_with(
+                "tickets/789/tags.json",
+                json={"tags": ["to_remove"]},
+            )
+
+    @pytest.mark.asyncio
+    async def test_remove_ticket_tags_empty_response(self):
+        """Test remove_ticket_tags method with empty response."""
+        client = self.get_client()
+
+        with patch.object(client.http_client, "delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = None
+
+            result = await client.remove_ticket_tags(789, ["to_remove"])
+
+            assert result == []
+
+    # Attachments API tests
+
+    @pytest.mark.asyncio
+    async def test_download_attachment(self):
+        """Test download_attachment method downloads file content."""
+        client = self.get_client()
+        test_content = b"test file content"
+
+        with patch("zendesk_sdk.client.httpx.AsyncClient") as mock_client_class:
+            mock_http = AsyncMock()
+            mock_response = AsyncMock()
+            mock_response.content = test_content
+            mock_response.raise_for_status = AsyncMock()
+            mock_http.get.return_value = mock_response
+            mock_http.__aenter__.return_value = mock_http
+            mock_http.__aexit__.return_value = None
+            mock_client_class.return_value = mock_http
+
+            result = await client.download_attachment("https://example.com/attachment/123")
+
+            assert result == test_content
+            mock_http.get.assert_called_once_with("https://example.com/attachment/123")
+
+    @pytest.mark.asyncio
+    async def test_upload_attachment(self):
+        """Test upload_attachment method uploads file and returns token."""
+        client = self.get_client()
+        test_data = b"file content"
+        expected_token = "abc123token"
+
+        with patch("zendesk_sdk.client.httpx.AsyncClient") as mock_client_class:
+            mock_http = AsyncMock()
+            mock_response = AsyncMock()
+            # json() is a regular method, not async
+            mock_response.json = lambda: {"upload": {"token": expected_token}}
+            mock_response.raise_for_status = AsyncMock()
+            mock_http.post.return_value = mock_response
+            mock_http.__aenter__.return_value = mock_http
+            mock_http.__aexit__.return_value = None
+            mock_client_class.return_value = mock_http
+
+            result = await client.upload_attachment(test_data, "test.txt", "text/plain")
+
+            assert result == expected_token
+            mock_http.post.assert_called_once()
+            call_args = mock_http.post.call_args
+            assert "filename" in str(call_args)
+            assert call_args.kwargs["content"] == test_data
+
+    @pytest.mark.asyncio
+    async def test_add_ticket_comment_with_uploads(self):
+        """Test add_ticket_comment method with file uploads."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 789,
+                "subject": "Test Ticket",
+                "status": "open",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.add_ticket_comment(
+                789,
+                "See attached file",
+                uploads=["token123", "token456"],
+            )
+
+            assert isinstance(result, Ticket)
+            mock_put.assert_called_once_with(
+                "tickets/789.json",
+                json={
+                    "ticket": {
+                        "comment": {
+                            "body": "See attached file",
+                            "public": False,
+                            "uploads": ["token123", "token456"],
+                        }
+                    }
+                },
+            )
+
     # Search API tests
 
     @pytest.mark.asyncio

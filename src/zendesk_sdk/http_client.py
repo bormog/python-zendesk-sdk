@@ -224,11 +224,21 @@ class HTTPClient:
         self,
         path: str,
         *,
+        json: Optional[Dict[str, Any]] = None,
         max_retries: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
-        """Make DELETE request and return JSON response if any."""
+        """Make DELETE request and return JSON response if any.
+
+        Args:
+            path: API endpoint path
+            json: Optional request body (some Zendesk endpoints like tags require this)
+            max_retries: Override default retry count
+
+        Returns:
+            JSON response from API if any, None for empty responses
+        """
         url = self._build_url(path)
-        response = await self._make_request_with_retry("DELETE", url, max_retries=max_retries)
+        response = await self._make_request_with_retry("DELETE", url, json=json, max_retries=max_retries)
 
         # Some DELETE requests return empty responses
         if response.content:

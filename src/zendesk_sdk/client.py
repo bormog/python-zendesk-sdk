@@ -3,6 +3,8 @@
 import asyncio
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
+import httpx
+
 from .config import ZendeskConfig
 from .http_client import HTTPClient
 from .models import Comment, EnrichedTicket, Organization, Ticket, User
@@ -101,18 +103,20 @@ class ZendeskClient:
         self,
         path: str,
         *,
+        json: Optional[Dict[str, Any]] = None,
         max_retries: Optional[int] = None,
     ) -> Optional[Dict[str, Any]]:
         """Make DELETE request to Zendesk API.
 
         Args:
             path: API endpoint path (e.g., 'users/123.json')
+            json: Optional request body (some endpoints like tags require this)
             max_retries: Override default retry count
 
         Returns:
             JSON response from API if any, None for empty responses
         """
-        return await self.http_client.delete(path, max_retries=max_retries)
+        return await self.http_client.delete(path, json=json, max_retries=max_retries)
 
     async def close(self) -> None:
         """Close HTTP client and cleanup resources."""
@@ -260,6 +264,309 @@ class ZendeskClient:
         """
         response = await self.get(f"tickets/{ticket_id}/comments.json", params={"per_page": per_page})
         return [Comment(**comment_data) for comment_data in response.get("comments", [])]
+
+    async def add_ticket_comment(
+        self,
+        ticket_id: int,
+        body: str,
+        *,
+        public: bool = False,
+        author_id: Optional[int] = None,
+        uploads: Optional[List[str]] = None,
+    ) -> Ticket:
+        """Add a comment to a ticket.
+
+        This is the primary way to add comments in Zendesk. Comments are added
+        by updating the ticket with a comment object.
+
+        Note: Zendesk does not support editing or deleting comments after creation.
+        Use make_comment_private() or redact_comment_string() instead.
+
+        Args:
+            ticket_id: The ticket's ID
+            body: The comment text (plain text or HTML)
+            public: If True, comment is visible to end users.
+                   If False, it's an internal note (default: False)
+            author_id: The user ID to show as the comment author.
+                      Defaults to the authenticated user.
+            uploads: List of upload tokens from upload_attachment() to attach files
+
+        Returns:
+            Updated Ticket object
+
+        Example:
+            # Add an internal note (default)
+            ticket = await client.add_ticket_comment(12345, "Internal: Customer is VIP")
+
+            # Add a public comment visible to customer
+            ticket = await client.add_ticket_comment(
+                12345,
+                "Thanks for contacting us!",
+                public=True
+            )
+
+            # Add a comment with attachment
+            token = await client.upload_attachment(data, "file.pdf", "application/pdf")
+            ticket = await client.add_ticket_comment(
+                12345,
+                "Please see the attached document.",
+                uploads=[token]
+            )
+        """
+        comment_data: Dict[str, Any] = {
+            "body": body,
+            "public": public,
+        }
+        if author_id is not None:
+            comment_data["author_id"] = author_id
+        if uploads:
+            comment_data["uploads"] = uploads
+
+        payload = {"ticket": {"comment": comment_data}}
+        response = await self.put(f"tickets/{ticket_id}.json", json=payload)
+        return Ticket(**response["ticket"])
+
+    async def make_comment_private(self, ticket_id: int, comment_id: int) -> bool:
+        """Make a public comment private (convert to internal note).
+
+        This action is irreversible - once a comment is made private,
+        it cannot be made public again.
+
+        Args:
+            ticket_id: The ticket's ID
+            comment_id: The comment's ID
+
+        Returns:
+            True if successful
+
+        Raises:
+            ZendeskHTTPException: If the operation fails (e.g., comment already private)
+
+        Example:
+            await client.make_comment_private(12345, 67890)
+        """
+        await self.put(f"tickets/{ticket_id}/comments/{comment_id}/make_private.json")
+        return True
+
+    async def redact_comment_string(
+        self,
+        ticket_id: int,
+        comment_id: int,
+        text: str,
+    ) -> Comment:
+        """Permanently redact (remove) a string from a comment.
+
+        This permanently removes the specified text from the comment body.
+        The text is replaced with a placeholder like "▇▇▇▇".
+
+        This is useful for removing sensitive information like:
+        - Credit card numbers
+        - Social security numbers
+        - Passwords or API keys
+        - Personal information
+
+        Warning: This action is PERMANENT and cannot be undone.
+
+        Args:
+            ticket_id: The ticket's ID
+            comment_id: The comment's ID
+            text: The exact text string to redact from the comment
+
+        Returns:
+            Updated Comment object
+
+        Raises:
+            ZendeskHTTPException: If the text is not found or operation fails
+
+        Example:
+            # Redact a credit card number from a comment
+            await client.redact_comment_string(
+                ticket_id=12345,
+                comment_id=67890,
+                text="4111-1111-1111-1111"
+            )
+        """
+        payload = {"text": text}
+        response = await self.put(
+            f"tickets/{ticket_id}/comments/{comment_id}/redact.json",
+            json=payload,
+        )
+        return Comment(**response["comment"])
+
+    # Tags API methods
+
+    async def get_ticket_tags(self, ticket_id: int) -> List[str]:
+        """Get all tags for a ticket.
+
+        Args:
+            ticket_id: The ticket's ID
+
+        Returns:
+            List of tag strings
+
+        Example:
+            tags = await client.get_ticket_tags(12345)
+            # ["vip", "urgent", "billing"]
+        """
+        response = await self.get(f"tickets/{ticket_id}/tags.json")
+        return response.get("tags", [])
+
+    async def add_ticket_tags(self, ticket_id: int, tags: List[str]) -> List[str]:
+        """Add tags to a ticket without removing existing tags.
+
+        This appends the specified tags to the ticket's existing tags.
+        Duplicate tags are automatically ignored.
+
+        Note: Cannot be used on closed tickets. Use set_ticket_tags() via
+        ticket update for closed tickets.
+
+        Args:
+            ticket_id: The ticket's ID
+            tags: List of tags to add
+
+        Returns:
+            Updated list of all tags on the ticket
+
+        Example:
+            # Existing tags: ["billing"]
+            tags = await client.add_ticket_tags(12345, ["vip", "urgent"])
+            # Result: ["billing", "vip", "urgent"]
+        """
+        response = await self.put(f"tickets/{ticket_id}/tags.json", json={"tags": tags})
+        return response.get("tags", [])
+
+    async def set_ticket_tags(self, ticket_id: int, tags: List[str]) -> List[str]:
+        """Replace all tags on a ticket with a new set.
+
+        This completely replaces the ticket's tags with the specified list.
+        All existing tags are removed.
+
+        Note: Cannot be used on closed tickets.
+
+        Args:
+            ticket_id: The ticket's ID
+            tags: List of tags to set (replaces all existing)
+
+        Returns:
+            Updated list of tags on the ticket
+
+        Example:
+            # Existing tags: ["old1", "old2"]
+            tags = await client.set_ticket_tags(12345, ["new1", "new2"])
+            # Result: ["new1", "new2"]
+        """
+        response = await self.post(f"tickets/{ticket_id}/tags.json", json={"tags": tags})
+        return response.get("tags", [])
+
+    async def remove_ticket_tags(self, ticket_id: int, tags: List[str]) -> List[str]:
+        """Remove specific tags from a ticket.
+
+        Only the specified tags are removed. Other tags remain unchanged.
+
+        Note: Cannot be used on closed tickets.
+
+        Args:
+            ticket_id: The ticket's ID
+            tags: List of tags to remove
+
+        Returns:
+            Updated list of remaining tags on the ticket
+
+        Example:
+            # Existing tags: ["vip", "urgent", "billing"]
+            tags = await client.remove_ticket_tags(12345, ["urgent"])
+            # Result: ["vip", "billing"]
+        """
+        # Zendesk DELETE with body requires special handling
+        response = await self.http_client.delete(
+            f"tickets/{ticket_id}/tags.json",
+            json={"tags": tags},
+        )
+        return response.get("tags", []) if response else []
+
+    # Attachments API methods
+
+    async def download_attachment(self, content_url: str) -> bytes:
+        """Download attachment content from Zendesk.
+
+        Zendesk attachment URLs require following redirects to access
+        the actual file content.
+
+        Args:
+            content_url: The content_url from a CommentAttachment object
+
+        Returns:
+            Raw bytes of the attachment content
+
+        Example:
+            comments = await client.get_ticket_comments(12345)
+            for comment in comments:
+                for attachment in comment.attachments or []:
+                    content = await client.download_attachment(attachment.content_url)
+                    with open(attachment.file_name, "wb") as f:
+                        f.write(content)
+        """
+        # Attachment URLs redirect to the actual file, so we need to follow redirects
+        async with httpx.AsyncClient(follow_redirects=True) as http:
+            response = await http.get(content_url)
+            response.raise_for_status()
+            return response.content
+
+    async def upload_attachment(
+        self,
+        data: bytes,
+        filename: str,
+        content_type: str = "application/octet-stream",
+    ) -> str:
+        """Upload a file attachment to Zendesk.
+
+        This uploads a file and returns a token that can be used when
+        creating a ticket comment with attachments.
+
+        Note: The token is valid for 60 minutes.
+
+        Args:
+            data: Raw bytes of the file content
+            filename: Name for the uploaded file (include extension)
+            content_type: MIME type of the file (default: application/octet-stream)
+
+        Returns:
+            Upload token to use with add_ticket_comment's uploads parameter
+
+        Example:
+            # Upload a file
+            with open("screenshot.png", "rb") as f:
+                token = await client.upload_attachment(
+                    f.read(),
+                    "screenshot.png",
+                    "image/png"
+                )
+
+            # Attach to a comment
+            await client.add_ticket_comment(
+                ticket_id=12345,
+                body="See attached screenshot",
+                uploads=[token]
+            )
+        """
+        # Zendesk upload requires raw binary data with Content-Type header
+        url = f"{self.config.endpoint}/uploads.json"
+        params = {"filename": filename}
+        headers = {
+            "Content-Type": content_type,
+        }
+
+        # Use authenticated request
+        auth = httpx.BasicAuth(
+            username=self.config.auth_tuple[0],
+            password=self.config.auth_tuple[1],
+        )
+
+        async with httpx.AsyncClient(auth=auth) as http:
+            response = await http.post(url, params=params, headers=headers, content=data)
+            response.raise_for_status()
+            result = response.json()
+            return result["upload"]["token"]
 
     # Search API methods
 

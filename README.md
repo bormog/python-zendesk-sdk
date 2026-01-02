@@ -117,6 +117,61 @@ for item in results:
 
 ### Comments
 - `get_ticket_comments(ticket_id)` - Get comments for a ticket
+- `add_ticket_comment(ticket_id, body, public=False)` - Add a comment (private by default)
+- `make_comment_private(ticket_id, comment_id)` - Convert public comment to internal note
+- `redact_comment_string(ticket_id, comment_id, text)` - Permanently redact text from comment
+
+### Tags
+- `get_ticket_tags(ticket_id)` - Get all tags for a ticket
+- `add_ticket_tags(ticket_id, tags)` - Add tags without removing existing ones
+- `set_ticket_tags(ticket_id, tags)` - Replace all tags with a new set
+- `remove_ticket_tags(ticket_id, tags)` - Remove specific tags
+
+```python
+# Get current tags
+tags = await client.get_ticket_tags(12345)
+# ["billing", "urgent"]
+
+# Add new tags (keeps existing)
+tags = await client.add_ticket_tags(12345, ["vip"])
+# ["billing", "urgent", "vip"]
+
+# Replace all tags
+tags = await client.set_ticket_tags(12345, ["support", "priority"])
+# ["support", "priority"]
+
+# Remove specific tags
+tags = await client.remove_ticket_tags(12345, ["priority"])
+# ["support"]
+```
+
+### Attachments
+- `download_attachment(content_url)` - Download attachment content as bytes
+- `upload_attachment(data, filename, content_type)` - Upload file and get token
+
+```python
+# Download an attachment from a comment
+comments = await client.get_ticket_comments(12345)
+for comment in comments:
+    for attachment in comment.attachments or []:
+        content = await client.download_attachment(attachment.content_url)
+        with open(attachment.file_name, "wb") as f:
+            f.write(content)
+
+# Upload a file and attach to a comment
+with open("screenshot.png", "rb") as f:
+    token = await client.upload_attachment(
+        f.read(),
+        "screenshot.png",
+        "image/png"
+    )
+
+await client.add_ticket_comment(
+    ticket_id=12345,
+    body="See attached screenshot",
+    uploads=[token]
+)
+```
 
 ### Search
 - `search(query)` - General search
