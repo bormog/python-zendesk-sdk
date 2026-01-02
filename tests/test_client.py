@@ -12,7 +12,6 @@ from zendesk_sdk.models import Comment, Organization, Ticket, User
 class TestZendeskClient:
     """Test cases for ZendeskClient class."""
 
-
     def test_http_client_property(self):
         """Test HTTP client property creates client lazily."""
         config = ZendeskConfig(
@@ -32,7 +31,6 @@ class TestZendeskClient:
         # Second access should return same instance
         http_client2 = client.http_client
         assert http_client2 is http_client
-
 
     @pytest.mark.asyncio
     async def test_close_method_no_http_client(self):
@@ -437,3 +435,291 @@ class TestZendeskClientAPIReadMethods:
             assert result[0].id == 456
             assert result[0].name == "Found Org"
             mock_get.assert_called_once_with("search.json", params={"query": "type:organization ACME", "per_page": 10})
+
+
+class TestZendeskClientEnrichedTickets:
+    """Test cases for EnrichedTicket methods."""
+
+    def get_client(self):
+        """Helper method to create a test client."""
+        config = ZendeskConfig(
+            subdomain="test",
+            email="user@example.com",
+            token="abc123",
+        )
+        return ZendeskClient(config)
+
+    @pytest.mark.asyncio
+    async def test_get_enriched_ticket(self):
+        """Test get_enriched_ticket method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        client = self.get_client()
+
+        ticket_response = {
+            "ticket": {
+                "id": 789,
+                "subject": "Test Ticket",
+                "status": "open",
+                "requester_id": 123,
+                "assignee_id": 456,
+                "created_at": "2023-01-01T00:00:00Z",
+            },
+            "users": [
+                {"id": 123, "name": "Requester", "email": "req@example.com", "created_at": "2023-01-01T00:00:00Z"},
+                {"id": 456, "name": "Assignee", "email": "assign@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ],
+        }
+
+        comments_response = {
+            "comments": [
+                {
+                    "id": 111,
+                    "body": "First comment",
+                    "author_id": 123,
+                    "public": True,
+                    "created_at": "2023-01-01T12:00:00Z",
+                },
+            ],
+            "users": [
+                {"id": 123, "name": "Requester", "email": "req@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ],
+        }
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [ticket_response, comments_response]
+
+            result = await client.get_enriched_ticket(789)
+
+            assert isinstance(result, EnrichedTicket)
+            assert result.ticket.id == 789
+            assert result.ticket.subject == "Test Ticket"
+            assert len(result.comments) == 1
+            assert 123 in result.users
+            assert result.requester is not None
+            assert result.requester.name == "Requester"
+
+    @pytest.mark.asyncio
+    async def test_search_enriched_tickets(self):
+        """Test search_enriched_tickets method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        client = self.get_client()
+
+        search_response = {
+            "results": [
+                {
+                    "id": 789,
+                    "subject": "Found Ticket",
+                    "status": "open",
+                    "result_type": "ticket",
+                    "requester_id": 123,
+                    "created_at": "2023-01-01T00:00:00Z",
+                },
+            ]
+        }
+
+        users_response = {
+            "users": [
+                {"id": 123, "name": "Requester", "email": "req@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ]
+        }
+
+        comments_response = {
+            "comments": [
+                {"id": 111, "body": "Comment", "author_id": 123, "public": True, "created_at": "2023-01-01T12:00:00Z"},
+            ],
+            "users": [],
+        }
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [search_response, users_response, comments_response]
+
+            result = await client.search_enriched_tickets("status:open", per_page=10)
+
+            assert len(result) == 1
+            assert isinstance(result[0], EnrichedTicket)
+            assert result[0].ticket.id == 789
+
+    @pytest.mark.asyncio
+    async def test_search_enriched_tickets_empty(self):
+        """Test search_enriched_tickets method with no results."""
+        client = self.get_client()
+
+        search_response = {"results": []}
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = search_response
+
+            result = await client.search_enriched_tickets("nonexistent", per_page=10)
+
+            assert result == []
+
+    @pytest.mark.asyncio
+    async def test_get_organization_enriched_tickets(self):
+        """Test get_organization_enriched_tickets method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        client = self.get_client()
+
+        tickets_response = {
+            "tickets": [
+                {
+                    "id": 789,
+                    "subject": "Org Ticket",
+                    "status": "open",
+                    "requester_id": 123,
+                    "created_at": "2023-01-01T00:00:00Z",
+                },
+            ],
+            "users": [
+                {"id": 123, "name": "Requester", "email": "req@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ],
+        }
+
+        comments_response = {
+            "comments": [],
+            "users": [],
+        }
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [tickets_response, comments_response]
+
+            result = await client.get_organization_enriched_tickets(456, per_page=10)
+
+            assert len(result) == 1
+            assert isinstance(result[0], EnrichedTicket)
+            assert result[0].ticket.id == 789
+
+    @pytest.mark.asyncio
+    async def test_get_user_enriched_tickets(self):
+        """Test get_user_enriched_tickets method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        client = self.get_client()
+
+        tickets_response = {
+            "tickets": [
+                {
+                    "id": 789,
+                    "subject": "User Ticket",
+                    "status": "open",
+                    "requester_id": 123,
+                    "created_at": "2023-01-01T00:00:00Z",
+                },
+            ],
+            "users": [
+                {"id": 123, "name": "Requester", "email": "req@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ],
+        }
+
+        comments_response = {
+            "comments": [],
+            "users": [],
+        }
+
+        with patch.object(client, "get", new_callable=AsyncMock) as mock_get:
+            mock_get.side_effect = [tickets_response, comments_response]
+
+            result = await client.get_user_enriched_tickets(123, per_page=10)
+
+            assert len(result) == 1
+            assert isinstance(result[0], EnrichedTicket)
+            assert result[0].ticket.id == 789
+
+    @pytest.mark.asyncio
+    async def test_fetch_users_batch_empty(self):
+        """Test _fetch_users_batch method with empty list."""
+        client = self.get_client()
+
+        result = await client._fetch_users_batch([])
+        assert result == {}
+
+    def test_collect_user_ids_from_tickets(self):
+        """Test _collect_user_ids_from_tickets method."""
+        client = self.get_client()
+        tickets = [
+            Ticket(id=1, requester_id=101, assignee_id=102, submitter_id=103, created_at="2023-01-01T00:00:00Z"),
+            Ticket(id=2, requester_id=104, collaborator_ids=[105, 106], created_at="2023-01-01T00:00:00Z"),
+        ]
+
+        result = client._collect_user_ids_from_tickets(tickets)
+
+        assert set(result) == {101, 102, 103, 104, 105, 106}
+
+    def test_extract_users_from_response(self):
+        """Test _extract_users_from_response method."""
+        client = self.get_client()
+        response = {
+            "users": [
+                {"id": 123, "name": "User1", "email": "user1@example.com", "created_at": "2023-01-01T00:00:00Z"},
+                {"id": 456, "name": "User2", "email": "user2@example.com", "created_at": "2023-01-01T00:00:00Z"},
+            ]
+        }
+
+        result = client._extract_users_from_response(response)
+
+        assert len(result) == 2
+        assert 123 in result
+        assert 456 in result
+        assert result[123].name == "User1"
+        assert result[456].name == "User2"
+
+
+class TestZendeskClientHTTPMethods:
+    """Test cases for ZendeskClient HTTP methods."""
+
+    def get_client(self):
+        """Helper method to create a test client."""
+        config = ZendeskConfig(
+            subdomain="test",
+            email="user@example.com",
+            token="abc123",
+        )
+        return ZendeskClient(config)
+
+    @pytest.mark.asyncio
+    async def test_post_method(self):
+        """Test post method."""
+        client = self.get_client()
+        mock_response = {"user": {"id": 123, "name": "New User"}}
+
+        with patch.object(client.http_client, "post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_response
+
+            result = await client.post("users.json", json={"user": {"name": "New User"}})
+
+            assert result == mock_response
+            mock_post.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_put_method(self):
+        """Test put method."""
+        client = self.get_client()
+        mock_response = {"user": {"id": 123, "name": "Updated User"}}
+
+        with patch.object(client.http_client, "put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = mock_response
+
+            result = await client.put("users/123.json", json={"user": {"name": "Updated User"}})
+
+            assert result == mock_response
+            mock_put.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_delete_method(self):
+        """Test delete method."""
+        client = self.get_client()
+
+        with patch.object(client.http_client, "delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = None
+
+            result = await client.delete("users/123.json")
+
+            assert result is None
+            mock_delete.assert_called_once()
+
+    def test_repr(self):
+        """Test __repr__ method."""
+        client = self.get_client()
+        assert repr(client) == "ZendeskClient(subdomain='test')"

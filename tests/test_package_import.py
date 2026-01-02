@@ -62,4 +62,3 @@ class TestPackageImport:
         for export in expected_exports:
             assert export in zendesk_sdk.__all__
             assert hasattr(zendesk_sdk, export)
-

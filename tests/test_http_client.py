@@ -26,7 +26,6 @@ class TestHTTPClient:
         assert client._client is None
         assert not client._closed
 
-
     def test_build_url(self):
         """Test URL building from paths."""
         config = ZendeskConfig(subdomain="test", email="test@example.com", token="abc123")
@@ -54,7 +53,6 @@ class TestHTTPClient:
         # Should cap at 60 seconds
         assert client._calculate_backoff(10) == 60.0
 
-
     @pytest.mark.asyncio
     async def test_rate_limit_exceeded(self):
         """Test rate limit exception when max retries exceeded."""
@@ -81,7 +79,6 @@ class TestHTTPClient:
                 assert exc_info.value.retry_after == 60
                 assert mock_client.request.call_count == 2  # Initial + 1 retry
 
-
     @pytest.mark.asyncio
     async def test_timeout_exceeded(self):
         """Test timeout exception when max retries exceeded."""
@@ -100,7 +97,6 @@ class TestHTTPClient:
 
                 assert "Request timed out after 30.0s" in str(exc_info.value)
                 assert mock_client.request.call_count == 2
-
 
     @pytest.mark.asyncio
     async def test_client_error_no_retry(self):
@@ -126,7 +122,6 @@ class TestHTTPClient:
             assert exc_info.value.status_code == 404
             # Should only be called once (no retries for 4xx)
             assert mock_client.request.call_count == 1
-
 
     @pytest.mark.asyncio
     async def test_close(self):
@@ -157,7 +152,6 @@ class TestHTTPClient:
 
         # Check that warning was logged
         assert "HTTPClient was not properly closed" in caplog.text
-
 
     @pytest.mark.asyncio
     async def test_custom_max_retries(self):

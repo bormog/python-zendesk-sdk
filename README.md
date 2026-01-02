@@ -88,6 +88,33 @@ config = ZendeskConfig()  # Will load from environment
 - `get_user_tickets(user_id)` - Get tickets for a user
 - `get_organization_tickets(organization_id)` - Get tickets for an organization
 
+### Enriched Tickets
+
+Load tickets with all related data (comments + users) in minimum API requests:
+
+- `get_enriched_ticket(ticket_id)` - Get ticket with comments and all users
+- `search_enriched_tickets(query)` - Search tickets with all related data
+- `get_organization_enriched_tickets(org_id)` - Get organization tickets with all data
+- `get_user_enriched_tickets(user_id)` - Get user tickets with all data
+
+```python
+# Get ticket with all related data
+enriched = await client.get_enriched_ticket(12345)
+
+print(f"Ticket: {enriched.ticket.subject}")
+print(f"Requester: {enriched.requester.name}")
+print(f"Assignee: {enriched.assignee.name if enriched.assignee else 'Unassigned'}")
+
+for comment in enriched.comments:
+    author = enriched.get_comment_author(comment)
+    print(f"Comment by {author.name}: {comment.body[:50]}...")
+
+# Search with all data loaded
+results = await client.search_enriched_tickets("status:open")
+for item in results:
+    print(f"{item.ticket.subject} - {len(item.comments)} comments")
+```
+
 ### Comments
 - `get_ticket_comments(ticket_id)` - Get comments for a ticket
 
@@ -96,6 +123,62 @@ config = ZendeskConfig()  # Will load from environment
 - `search_users(query)` - Search users
 - `search_tickets(query)` - Search tickets
 - `search_organizations(query)` - Search organizations
+
+## Error Handling
+
+The SDK provides specific exception classes for different error types:
+
+```python
+from zendesk_sdk.exceptions import (
+    ZendeskAuthException,
+    ZendeskHTTPException,
+    ZendeskRateLimitException,
+    ZendeskTimeoutException,
+    ZendeskValidationException,
+)
+
+async with ZendeskClient(config) as client:
+    try:
+        user = await client.get_user(user_id=12345)
+    except ZendeskAuthException as e:
+        # 401/403 - Authentication failed
+        print(f"Auth error: {e.message}")
+    except ZendeskRateLimitException as e:
+        # 429 - Rate limit exceeded
+        print(f"Rate limited, retry after: {e.retry_after}s")
+    except ZendeskHTTPException as e:
+        # Other HTTP errors (404, 500, etc.)
+        print(f"HTTP {e.status_code}: {e.message}")
+    except ZendeskTimeoutException as e:
+        # Request timeout
+        print(f"Timeout: {e.message}")
+```
+
+### Automatic Retry
+
+The SDK automatically retries on:
+- Rate limiting (429) - with respect to `Retry-After` header
+- Server errors (5xx) - with exponential backoff
+- Network errors and timeouts
+
+Configure retry behavior:
+```python
+config = ZendeskConfig(
+    subdomain="mycompany",
+    email="user@example.com",
+    token="api_token",
+    timeout=30.0,      # Request timeout in seconds
+    max_retries=3,     # Number of retry attempts
+)
+```
+
+## Examples
+
+See the `examples/` directory for complete usage examples:
+- `basic_usage.py` - Basic configuration and API operations
+- `pagination_example.py` - Working with paginated results
+- `error_handling.py` - Error handling patterns
+- `enriched_tickets.py` - Loading tickets with related data
 
 ## Requirements
 

@@ -36,7 +36,7 @@ class CommentMetadata(ZendeskModel):
 
     system: Optional[Dict[str, Any]] = Field(None, description="System information like web client, IP address")
     custom: Optional[Dict[str, Any]] = Field(None, description="Custom metadata")
-    flags: Optional[List[str]] = Field(None, description="Comment flags")
+    flags: Optional[List[Any]] = Field(None, description="Comment flags (can be strings or integers)")
     flags_options: Optional[Dict[str, Any]] = Field(None, description="Comment flag options")
 
 

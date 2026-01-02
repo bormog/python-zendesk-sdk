@@ -16,10 +16,12 @@ from .exceptions import (
     ZendeskPaginationException,
     ZendeskRateLimitException,
 )
+from .models import EnrichedTicket
 
 __all__ = [
     "ZendeskClient",
     "ZendeskConfig",
+    "EnrichedTicket",
     "ZendeskBaseException",
     "ZendeskHTTPException",
     "ZendeskAuthException",

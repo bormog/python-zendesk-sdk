@@ -1,10 +1,11 @@
 """Main Zendesk API client."""
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from .config import ZendeskConfig
 from .http_client import HTTPClient
-from .models import Comment, Organization, Ticket, User
+from .models import Comment, EnrichedTicket, Organization, Ticket, User
 from .pagination import ZendeskPaginator
 
 if TYPE_CHECKING:
@@ -319,3 +320,236 @@ class ZendeskClient:
         response = await self.get("search.json", params={"query": full_query, "per_page": per_page})
         results = response.get("results", [])
         return [Organization(**result) for result in results if result.get("result_type") == "organization"]
+
+    # EnrichedTicket API methods - tickets with all related data
+
+    def _extract_users_from_response(self, response: Dict[str, Any]) -> Dict[int, User]:
+        """Extract sideloaded users from API response.
+
+        Args:
+            response: API response containing 'users' array
+
+        Returns:
+            Dictionary mapping user_id to User object
+        """
+        users: Dict[int, User] = {}
+        for user_data in response.get("users", []):
+            user = User(**user_data)
+            if user.id is not None:
+                users[user.id] = user
+        return users
+
+    def _collect_user_ids_from_tickets(self, tickets: List[Ticket]) -> List[int]:
+        """Collect all user IDs from a list of tickets.
+
+        Args:
+            tickets: List of Ticket objects
+
+        Returns:
+            List of unique user IDs
+        """
+        user_ids: set[int] = set()
+        for ticket in tickets:
+            if ticket.requester_id:
+                user_ids.add(ticket.requester_id)
+            if ticket.assignee_id:
+                user_ids.add(ticket.assignee_id)
+            if ticket.submitter_id:
+                user_ids.add(ticket.submitter_id)
+            if ticket.collaborator_ids:
+                user_ids.update(ticket.collaborator_ids)
+            if ticket.follower_ids:
+                user_ids.update(ticket.follower_ids)
+        return list(user_ids)
+
+    async def _fetch_users_batch(self, user_ids: List[int]) -> Dict[int, User]:
+        """Fetch multiple users by IDs using show_many endpoint.
+
+        Args:
+            user_ids: List of user IDs to fetch
+
+        Returns:
+            Dictionary mapping user_id to User object
+        """
+        if not user_ids:
+            return {}
+
+        # Zendesk show_many supports up to 100 IDs
+        unique_ids = list(set(user_ids))[:100]
+        ids_param = ",".join(str(uid) for uid in unique_ids)
+
+        response = await self.get(f"users/show_many.json?ids={ids_param}")
+        return self._extract_users_from_response(response)
+
+    async def _fetch_comments_with_users(self, ticket_id: int) -> tuple[List[Comment], Dict[int, User]]:
+        """Fetch comments for a ticket with sideloaded users.
+
+        Args:
+            ticket_id: Ticket ID
+
+        Returns:
+            Tuple of (comments list, users dict)
+        """
+        response = await self.get(f"tickets/{ticket_id}/comments.json", params={"include": "users"})
+        comments = [Comment(**c) for c in response.get("comments", [])]
+        users = self._extract_users_from_response(response)
+        return comments, users
+
+    async def _build_enriched_ticket(self, ticket: Ticket, ticket_users: Dict[int, User]) -> EnrichedTicket:
+        """Build EnrichedTicket by fetching comments and merging users.
+
+        Args:
+            ticket: Ticket object
+            ticket_users: Users already loaded with ticket (from sideloading)
+
+        Returns:
+            EnrichedTicket object with all data
+        """
+        if ticket.id is None:
+            raise ValueError("Ticket must have an ID to fetch full data")
+        comments, comment_users = await self._fetch_comments_with_users(ticket.id)
+
+        # Merge all users
+        all_users = {**ticket_users, **comment_users}
+
+        return EnrichedTicket(ticket=ticket, comments=comments, users=all_users)
+
+    async def _build_enriched_tickets(
+        self, tickets: List[Ticket], ticket_users: Dict[int, User]
+    ) -> List[EnrichedTicket]:
+        """Build list of EnrichedTicket by fetching comments in parallel.
+
+        Args:
+            tickets: List of Ticket objects
+            ticket_users: Users already loaded with tickets (from sideloading)
+
+        Returns:
+            List of EnrichedTicket objects
+        """
+        if not tickets:
+            return []
+
+        # Filter tickets with valid IDs
+        valid_tickets = [t for t in tickets if t.id is not None]
+        if not valid_tickets:
+            return []
+
+        # Fetch comments for all tickets in parallel
+        comment_tasks = [self._fetch_comments_with_users(t.id) for t in valid_tickets]  # type: ignore[arg-type]
+        results = await asyncio.gather(*comment_tasks)
+
+        # Build EnrichedTicket for each ticket with only its users
+        enriched_tickets: List[EnrichedTicket] = []
+        for ticket, (comments, comment_users) in zip(valid_tickets, results):
+            # Collect user IDs for this specific ticket
+            ticket_user_ids: set[int] = set()
+            if ticket.requester_id:
+                ticket_user_ids.add(ticket.requester_id)
+            if ticket.assignee_id:
+                ticket_user_ids.add(ticket.assignee_id)
+            if ticket.submitter_id:
+                ticket_user_ids.add(ticket.submitter_id)
+            if ticket.collaborator_ids:
+                ticket_user_ids.update(ticket.collaborator_ids)
+            if ticket.follower_ids:
+                ticket_user_ids.update(ticket.follower_ids)
+
+            # Filter ticket_users to only include users for this ticket
+            this_ticket_users = {uid: user for uid, user in ticket_users.items() if uid in ticket_user_ids}
+
+            # Merge with comment users
+            all_users = {**this_ticket_users, **comment_users}
+            enriched_tickets.append(EnrichedTicket(ticket=ticket, comments=comments, users=all_users))
+
+        return enriched_tickets
+
+    async def get_enriched_ticket(self, ticket_id: int) -> EnrichedTicket:
+        """Get a ticket with all related data: comments and users.
+
+        This method fetches the ticket with sideloaded users,
+        then fetches comments with their authors in a single additional request.
+
+        Args:
+            ticket_id: The ticket's ID
+
+        Returns:
+            EnrichedTicket object containing ticket, comments, and all related users
+        """
+        # Fetch ticket with sideloaded users
+        response = await self.get(f"tickets/{ticket_id}.json", params={"include": "users"})
+        ticket = Ticket(**response["ticket"])
+        ticket_users = self._extract_users_from_response(response)
+
+        return await self._build_enriched_ticket(ticket, ticket_users)
+
+    async def search_enriched_tickets(self, query: str, per_page: int = 100) -> List[EnrichedTicket]:
+        """Search for tickets and load all related data.
+
+        This method searches for tickets, then fetches users and comments in parallel.
+        Note: Zendesk Search API does not support sideloading, so users are fetched separately.
+
+        Args:
+            query: Search query string
+            per_page: Number of results per page (max 100)
+
+        Returns:
+            List of EnrichedTicket objects
+        """
+        full_query = f"type:ticket {query}"
+        response = await self.get("search.json", params={"query": full_query, "per_page": per_page})
+
+        results = response.get("results", [])
+        tickets = [Ticket(**r) for r in results if r.get("result_type") == "ticket"]
+
+        if not tickets:
+            return []
+
+        # Fetch users from tickets via show_many (search API doesn't support sideloading)
+        user_ids = self._collect_user_ids_from_tickets(tickets)
+        ticket_users = await self._fetch_users_batch(user_ids)
+
+        return await self._build_enriched_tickets(tickets, ticket_users)
+
+    async def get_organization_enriched_tickets(self, org_id: int, per_page: int = 100) -> List[EnrichedTicket]:
+        """Get tickets for an organization with all related data.
+
+        This method fetches organization tickets with sideloaded users,
+        then fetches comments for all tickets in parallel.
+
+        Args:
+            org_id: The organization's ID
+            per_page: Number of tickets per page (max 100)
+
+        Returns:
+            List of EnrichedTicket objects
+        """
+        response = await self.get(
+            f"organizations/{org_id}/tickets.json", params={"per_page": per_page, "include": "users"}
+        )
+
+        tickets = [Ticket(**t) for t in response.get("tickets", [])]
+        ticket_users = self._extract_users_from_response(response)
+
+        return await self._build_enriched_tickets(tickets, ticket_users)
+
+    async def get_user_enriched_tickets(self, user_id: int, per_page: int = 100) -> List[EnrichedTicket]:
+        """Get tickets requested by a user with all related data.
+
+        This method fetches user's tickets with sideloaded users,
+        then fetches comments for all tickets in parallel.
+
+        Args:
+            user_id: The user's ID
+            per_page: Number of tickets per page (max 100)
+
+        Returns:
+            List of EnrichedTicket objects
+        """
+        response = await self.get(
+            f"users/{user_id}/tickets/requested.json", params={"per_page": per_page, "include": "users"}
+        )
+
+        tickets = [Ticket(**t) for t in response.get("tickets", [])]
+        ticket_users = self._extract_users_from_response(response)
+
+        return await self._build_enriched_tickets(tickets, ticket_users)

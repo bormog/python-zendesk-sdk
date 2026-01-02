@@ -66,11 +66,14 @@ class TestZendeskConfig:
 
     def test_env_variables(self):
         """Test loading config from environment variables."""
-        with patch.dict(os.environ, {
-            "ZENDESK_SUBDOMAIN": "env-test",
-            "ZENDESK_EMAIL": "env@example.com",
-            "ZENDESK_TOKEN": "env_token_123",
-        }):
+        with patch.dict(
+            os.environ,
+            {
+                "ZENDESK_SUBDOMAIN": "env-test",
+                "ZENDESK_EMAIL": "env@example.com",
+                "ZENDESK_TOKEN": "env_token_123",
+            },
+        ):
             config = ZendeskConfig()
             assert config.subdomain == "env-test"
             assert config.email == "env@example.com"

@@ -441,3 +441,161 @@ class TestModelValidation:
         assert isinstance(json_str, str)
         assert "Test Ticket" in json_str
         assert "2023-12-25T10:30:00" in json_str
+
+
+class TestZendeskModelStrRepr:
+    """Test __str__ and __repr__ methods of ZendeskModel."""
+
+    def test_str_with_id_field(self):
+        """Test __str__ method with id field."""
+        user = User(id=123, name="Test User")
+        result = str(user)
+        assert "User" in result
+        assert "id=123" in result
+
+    def test_str_with_name_field(self):
+        """Test __str__ method with name field but no id."""
+        user = User(name="Test User")
+        result = str(user)
+        assert "User" in result
+        # id field is checked first, so id=None is shown even if name exists
+        assert "id=None" in result
+
+    def test_str_with_subject_field(self):
+        """Test __str__ method with subject field."""
+        ticket = Ticket(subject="Test Subject")
+        result = str(ticket)
+        assert "Ticket" in result
+        # id field is checked first, so id=None is shown
+        assert "id=None" in result
+
+    def test_repr_method(self):
+        """Test __repr__ method."""
+        user = User(id=123, name="Test User", email="test@example.com")
+        result = repr(user)
+        assert "User" in result
+        assert "123" in result
+        assert "Test User" in result
+
+
+class TestEnrichedTicketModel:
+    """Test EnrichedTicket model."""
+
+    def test_enriched_ticket_creation(self):
+        """Test EnrichedTicket creation."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test Ticket", requester_id=123, assignee_id=456)
+        comments = [Comment(id=111, body="Comment 1", author_id=123)]
+        users = {
+            123: User(id=123, name="Requester"),
+            456: User(id=456, name="Assignee"),
+        }
+
+        enriched = EnrichedTicket(ticket=ticket, comments=comments, users=users)
+
+        assert enriched.ticket.id == 789
+        assert len(enriched.comments) == 1
+        assert len(enriched.users) == 2
+
+    def test_enriched_ticket_get_user(self):
+        """Test get_user method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", requester_id=123)
+        users = {123: User(id=123, name="Requester")}
+
+        enriched = EnrichedTicket(ticket=ticket, users=users)
+
+        # Get existing user
+        user = enriched.get_user(123)
+        assert user is not None
+        assert user.name == "Requester"
+
+        # Get non-existing user
+        user = enriched.get_user(999)
+        assert user is None
+
+        # Get user with None id
+        user = enriched.get_user(None)
+        assert user is None
+
+    def test_enriched_ticket_requester_property(self):
+        """Test requester property."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", requester_id=123)
+        users = {123: User(id=123, name="Requester")}
+
+        enriched = EnrichedTicket(ticket=ticket, users=users)
+
+        assert enriched.requester is not None
+        assert enriched.requester.name == "Requester"
+
+    def test_enriched_ticket_requester_property_none(self):
+        """Test requester property when no requester_id."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        enriched = EnrichedTicket(ticket=ticket)
+
+        assert enriched.requester is None
+
+    def test_enriched_ticket_assignee_property(self):
+        """Test assignee property."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", assignee_id=456)
+        users = {456: User(id=456, name="Assignee")}
+
+        enriched = EnrichedTicket(ticket=ticket, users=users)
+
+        assert enriched.assignee is not None
+        assert enriched.assignee.name == "Assignee"
+
+    def test_enriched_ticket_assignee_property_none(self):
+        """Test assignee property when no assignee_id."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        enriched = EnrichedTicket(ticket=ticket)
+
+        assert enriched.assignee is None
+
+    def test_enriched_ticket_submitter_property(self):
+        """Test submitter property."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", submitter_id=789)
+        users = {789: User(id=789, name="Submitter")}
+
+        enriched = EnrichedTicket(ticket=ticket, users=users)
+
+        assert enriched.submitter is not None
+        assert enriched.submitter.name == "Submitter"
+
+    def test_enriched_ticket_get_comment_author(self):
+        """Test get_comment_author method."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        comment = Comment(id=111, body="Comment", author_id=123)
+        users = {123: User(id=123, name="Author")}
+
+        enriched = EnrichedTicket(ticket=ticket, comments=[comment], users=users)
+
+        author = enriched.get_comment_author(comment)
+        assert author is not None
+        assert author.name == "Author"
+
+    def test_enriched_ticket_get_comment_author_not_found(self):
+        """Test get_comment_author when author not in users."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        comment = Comment(id=111, body="Comment", author_id=999)
+
+        enriched = EnrichedTicket(ticket=ticket, comments=[comment], users={})
+
+        author = enriched.get_comment_author(comment)
+        assert author is None
