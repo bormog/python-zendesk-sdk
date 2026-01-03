@@ -3,6 +3,7 @@
 from .base import ZendeskModel
 from .comment import Comment, CommentAttachment, CommentMetadata, CommentVia
 from .enriched_ticket import EnrichedTicket
+from .help_center import Article, Category, Section
 from .organization import Organization, OrganizationField, OrganizationSubscription
 from .ticket import (
     SatisfactionRating,
@@ -40,4 +41,8 @@ __all__ = [
     "CommentVia",
     # Enriched ticket model
     "EnrichedTicket",
+    # Help Center models
+    "Category",
+    "Section",
+    "Article",
 ]

@@ -294,3 +294,62 @@ class ZendeskPaginator:
         path = f"incremental/{resource_type}.json"
         params = {"start_time": start_time}
         return IncrementalPaginator(http_client, path, params=params)
+
+    # Help Center paginators
+
+    @staticmethod
+    def create_categories_paginator(http_client: Any, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
+        """Create paginator for Help Center categories endpoint."""
+
+        class CategoriesPaginator(OffsetPaginator[Dict[str, Any]]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+                return response.get("categories", [])
+
+        return CategoriesPaginator(http_client, "help_center/categories.json", per_page=per_page)
+
+    @staticmethod
+    def create_sections_paginator(
+        http_client: Any, per_page: int = 100, category_id: Optional[int] = None
+    ) -> OffsetPaginator[Dict[str, Any]]:
+        """Create paginator for Help Center sections endpoint.
+
+        Args:
+            http_client: HTTP client instance
+            per_page: Number of items per page
+            category_id: If provided, list sections only in this category
+        """
+
+        class SectionsPaginator(OffsetPaginator[Dict[str, Any]]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+                return response.get("sections", [])
+
+        if category_id:
+            path = f"help_center/categories/{category_id}/sections.json"
+        else:
+            path = "help_center/sections.json"
+        return SectionsPaginator(http_client, path, per_page=per_page)
+
+    @staticmethod
+    def create_articles_paginator(
+        http_client: Any, per_page: int = 100, section_id: Optional[int] = None, category_id: Optional[int] = None
+    ) -> OffsetPaginator[Dict[str, Any]]:
+        """Create paginator for Help Center articles endpoint.
+
+        Args:
+            http_client: HTTP client instance
+            per_page: Number of items per page
+            section_id: If provided, list articles only in this section
+            category_id: If provided, list articles only in this category
+        """
+
+        class ArticlesPaginator(OffsetPaginator[Dict[str, Any]]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+                return response.get("articles", [])
+
+        if section_id:
+            path = f"help_center/sections/{section_id}/articles.json"
+        elif category_id:
+            path = f"help_center/categories/{category_id}/articles.json"
+        else:
+            path = "help_center/articles.json"
+        return ArticlesPaginator(http_client, path, per_page=per_page)

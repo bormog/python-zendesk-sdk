@@ -5,7 +5,8 @@ Modern Python SDK for Zendesk API with async support, full type safety, and comp
 ## Features
 
 - **Async HTTP Client**: Built on httpx with retry logic, rate limiting, and exponential backoff
-- **Type Safety**: Full Pydantic v2 models for Users, Organizations, Tickets, and Comments
+- **Type Safety**: Full Pydantic v2 models for Users, Organizations, Tickets, Comments, and Help Center
+- **Help Center**: Full CRUD for Categories, Sections, and Articles
 - **Pagination**: Both offset-based and cursor-based pagination support
 - **Search**: Zendesk search API support
 - **Configuration**: Flexible configuration with environment variable support
@@ -179,6 +180,84 @@ await client.add_ticket_comment(
 - `search_tickets(query)` - Search tickets
 - `search_organizations(query)` - Search organizations
 
+### Help Center
+
+Access Help Center (Guide) via `client.help_center` namespace:
+
+#### Categories
+- `get_categories()` - List categories with pagination
+- `get_category(category_id)` - Get category by ID
+- `create_category(name, description, position)` - Create category
+- `update_category(category_id, ...)` - Update category
+- `delete_category(category_id, force=True)` - Delete category (cascade deletes sections/articles)
+
+#### Sections
+- `get_sections()` - List all sections with pagination
+- `get_category_sections(category_id)` - List sections in a category
+- `get_section(section_id)` - Get section by ID
+- `create_section(category_id, name, description, position)` - Create section
+- `update_section(section_id, ...)` - Update section
+- `delete_section(section_id, force=True)` - Delete section (cascade deletes articles)
+
+#### Articles
+- `get_articles()` - List all articles with pagination
+- `get_section_articles(section_id)` - List articles in a section
+- `get_category_articles(category_id)` - List articles in a category
+- `get_article(article_id)` - Get article by ID
+- `create_article(section_id, title, body, ...)` - Create article
+- `update_article(article_id, ...)` - Update article
+- `delete_article(article_id)` - Delete article
+- `search_articles(query, ...)` - Full-text search with snippets
+
+```python
+async with ZendeskClient(config) as client:
+    hc = client.help_center
+
+    # Create category -> section -> article hierarchy
+    category = await hc.create_category(
+        name="Product Documentation",
+        description="Help articles for our product"
+    )
+
+    section = await hc.create_section(
+        category_id=category.id,
+        name="Getting Started"
+    )
+
+    article = await hc.create_article(
+        section_id=section.id,
+        title="Installation Guide",
+        body="<h1>Installation</h1><p>Follow these steps...</p>",
+        permission_group_id=252606,  # Required
+        draft=False,  # Publish immediately
+        label_names=["installation", "guide"],
+    )
+
+    # Search articles (useful for AI assistants)
+    results = await hc.search_articles("password reset")
+    for article in results:
+        print(f"{article.title}")
+        print(f"Snippet: {article.snippet}")  # Matching text with <em> tags
+
+    # Paginate through all articles
+    paginator = await hc.get_articles(per_page=50)
+    async for article_data in paginator:
+        print(article_data["title"])
+
+    # Update article
+    await hc.update_article(
+        article.id,
+        title="Updated Title",
+        promoted=True,
+        label_names=["updated", "featured"],
+    )
+
+    # Cascade delete (removes category + all sections + all articles)
+    await hc.delete_category(category.id, force=True)
+```
+
+> **Note**: `delete_category()` and `delete_section()` require `force=True` as a safety measure since they cascade delete all child content.
+
 ## Error Handling
 
 The SDK provides specific exception classes for different error types:
@@ -234,6 +313,7 @@ See the `examples/` directory for complete usage examples:
 - `pagination_example.py` - Working with paginated results
 - `error_handling.py` - Error handling patterns
 - `enriched_tickets.py` - Loading tickets with related data
+- `help_center.py` - Help Center categories, sections, and articles
 
 ## Requirements
 

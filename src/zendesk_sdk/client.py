@@ -11,6 +11,7 @@ from .models import Comment, EnrichedTicket, Organization, Ticket, User
 from .pagination import ZendeskPaginator
 
 if TYPE_CHECKING:
+    from .help_center_client import HelpCenterClient
     from .pagination import Paginator
 
 
@@ -30,6 +31,7 @@ class ZendeskClient:
         """
         self.config = config
         self._http_client: Optional[HTTPClient] = None
+        self._help_center_client: Optional["HelpCenterClient"] = None
 
     def __repr__(self) -> str:
         """String representation of the client."""
@@ -41,6 +43,37 @@ class ZendeskClient:
         if self._http_client is None:
             self._http_client = HTTPClient(self.config)
         return self._http_client
+
+    @property
+    def help_center(self) -> "HelpCenterClient":
+        """Get Help Center client for accessing Help Center API.
+
+        The Help Center client provides access to categories, sections,
+        and articles in your Zendesk Help Center / Guide.
+
+        Returns:
+            HelpCenterClient instance
+
+        Example:
+            async with ZendeskClient(config) as client:
+                # Get a category
+                category = await client.help_center.get_category(123)
+
+                # Search articles
+                articles = await client.help_center.search_articles("password reset")
+
+                # Create an article
+                article = await client.help_center.create_article(
+                    section_id=456,
+                    title="How to Reset Password",
+                    body="<p>Follow these steps...</p>"
+                )
+        """
+        if self._help_center_client is None:
+            from .help_center_client import HelpCenterClient
+
+            self._help_center_client = HelpCenterClient(self.http_client)
+        return self._help_center_client
 
     async def get(
         self,
