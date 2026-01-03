@@ -21,7 +21,7 @@ from .clients import (
     TicketsClient,
     UsersClient,
 )
-from .config import ZendeskConfig
+from .config import CacheConfig, ZendeskConfig
 from .exceptions import (
     ZendeskAuthException,
     ZendeskBaseException,
@@ -35,6 +35,7 @@ __all__ = [
     # Main client
     "ZendeskClient",
     "ZendeskConfig",
+    "CacheConfig",
     # Resource clients
     "UsersClient",
     "OrganizationsClient",

@@ -1,9 +1,37 @@
 """Configuration management for Zendesk SDK."""
 
 import os
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, computed_field, field_validator
+
+
+class CacheConfig(BaseModel):
+    """Cache configuration for Zendesk SDK.
+
+    Controls TTL (time-to-live) and max size for different resource caches.
+    Set enabled=False to disable caching entirely.
+    """
+
+    enabled: bool = Field(default=True, description="Enable/disable caching")
+
+    # Users cache
+    user_ttl: int = Field(default=300, description="User cache TTL in seconds (default: 5 min)", ge=0)
+    user_maxsize: int = Field(default=1000, description="Max cached users", ge=1)
+
+    # Organizations cache
+    org_ttl: int = Field(default=600, description="Organization cache TTL in seconds (default: 10 min)", ge=0)
+    org_maxsize: int = Field(default=500, description="Max cached organizations", ge=1)
+
+    # Help Center cache
+    article_ttl: int = Field(default=900, description="Article cache TTL in seconds (default: 15 min)", ge=0)
+    article_maxsize: int = Field(default=500, description="Max cached articles", ge=1)
+
+    category_ttl: int = Field(default=1800, description="Category cache TTL in seconds (default: 30 min)", ge=0)
+    category_maxsize: int = Field(default=200, description="Max cached categories", ge=1)
+
+    section_ttl: int = Field(default=1800, description="Section cache TTL in seconds (default: 30 min)", ge=0)
+    section_maxsize: int = Field(default=200, description="Max cached sections", ge=1)
 
 
 class ZendeskConfig(BaseModel):
@@ -38,6 +66,10 @@ class ZendeskConfig(BaseModel):
         default=3,
         description="Maximum number of retry attempts",
         ge=0,
+    )
+    cache: CacheConfig = Field(
+        default_factory=CacheConfig,
+        description="Cache configuration",
     )
 
     def __init__(self, **data: Any) -> None:

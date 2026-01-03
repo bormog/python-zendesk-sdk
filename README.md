@@ -7,6 +7,7 @@ Modern Python SDK for Zendesk API with async support, full type safety, and comp
 - **Async HTTP Client**: Built on httpx with retry logic, rate limiting, and exponential backoff
 - **Type Safety**: Full Pydantic v2 models for Users, Organizations, Tickets, Comments, and Help Center
 - **Namespace Pattern**: Clean API organization (`client.users`, `client.tickets`, `client.help_center`)
+- **Caching**: Built-in TTL-based caching for users, organizations, and Help Center content
 - **Help Center**: Full CRUD for Categories, Sections, and Articles
 - **Pagination**: Both offset-based and cursor-based pagination support
 - **Search**: Zendesk search API support
@@ -280,6 +281,64 @@ config = ZendeskConfig(
 )
 ```
 
+## Caching
+
+The SDK includes built-in caching for frequently accessed resources. Caching is enabled by default and can be configured or disabled.
+
+### Default Cache Settings
+
+| Resource | TTL | Max Size |
+|----------|-----|----------|
+| Users | 5 min | 1000 |
+| Organizations | 10 min | 500 |
+| Articles | 15 min | 500 |
+| Categories | 30 min | 200 |
+| Sections | 30 min | 200 |
+
+### Custom Cache Configuration
+
+```python
+from zendesk_sdk import CacheConfig, ZendeskClient, ZendeskConfig
+
+config = ZendeskConfig(
+    subdomain="mycompany",
+    email="user@example.com",
+    token="api_token",
+    cache=CacheConfig(
+        enabled=True,
+        user_ttl=60,           # 1 minute
+        user_maxsize=100,
+        org_ttl=300,           # 5 minutes
+        article_ttl=600,       # 10 minutes
+    )
+)
+```
+
+### Disable Caching
+
+```python
+config = ZendeskConfig(
+    subdomain="mycompany",
+    email="user@example.com",
+    token="api_token",
+    cache=CacheConfig(enabled=False)
+)
+```
+
+### Cache Control
+
+```python
+# Check cache statistics
+info = client.users.get.cache_info()
+print(f"Hits: {info.hits}, Misses: {info.misses}")
+
+# Clear all cached users
+client.users.get.cache_clear()
+
+# Invalidate specific entry
+client.users.get.cache_invalidate(user_id)
+```
+
 ## Examples
 
 See the `examples/` directory for complete usage examples:
@@ -288,12 +347,14 @@ See the `examples/` directory for complete usage examples:
 - `error_handling.py` - Error handling patterns
 - `enriched_tickets.py` - Loading tickets with related data
 - `help_center.py` - Help Center categories, sections, and articles
+- `caching.py` - Cache configuration and usage
 
 ## Requirements
 
 - Python 3.8+
 - httpx
 - pydantic >=2.0
+- async-lru
 
 ## License
 

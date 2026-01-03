@@ -1,12 +1,14 @@
 """Help Center Categories API client."""
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from ...models.help_center import Category
 from ...pagination import ZendeskPaginator
 from ..base import HelpCenterBaseClient
 
 if TYPE_CHECKING:
+    from ...config import CacheConfig
+    from ...http_client import HTTPClient
     from ...pagination import Paginator
 
 
@@ -31,8 +33,24 @@ class CategoriesClient(HelpCenterBaseClient):
             await client.help_center.categories.delete(12345, force=True)
     """
 
-    async def get(self, category_id: int) -> Category:
+    def __init__(
+        self,
+        http_client: "HTTPClient",
+        cache_config: Optional["CacheConfig"] = None,
+    ) -> None:
+        """Initialize CategoriesClient with optional caching."""
+        super().__init__(http_client, cache_config)
+        # Set up cached methods
+        self.get: Callable[[int], Category] = self._create_cached_method(
+            self._get_impl,
+            maxsize=cache_config.category_maxsize if cache_config else 200,
+            ttl=cache_config.category_ttl if cache_config else 1800,
+        )
+
+    async def _get_impl(self, category_id: int) -> Category:
         """Get a specific Help Center category by ID.
+
+        Results are cached based on cache configuration.
 
         Args:
             category_id: The category's ID

@@ -1,12 +1,14 @@
 """Help Center Sections API client."""
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from ...models.help_center import Section
 from ...pagination import ZendeskPaginator
 from ..base import HelpCenterBaseClient
 
 if TYPE_CHECKING:
+    from ...config import CacheConfig
+    from ...http_client import HTTPClient
     from ...pagination import Paginator
 
 
@@ -34,8 +36,24 @@ class SectionsClient(HelpCenterBaseClient):
             await client.help_center.sections.delete(12345, force=True)
     """
 
-    async def get(self, section_id: int) -> Section:
+    def __init__(
+        self,
+        http_client: "HTTPClient",
+        cache_config: Optional["CacheConfig"] = None,
+    ) -> None:
+        """Initialize SectionsClient with optional caching."""
+        super().__init__(http_client, cache_config)
+        # Set up cached methods
+        self.get: Callable[[int], Section] = self._create_cached_method(
+            self._get_impl,
+            maxsize=cache_config.section_maxsize if cache_config else 200,
+            ttl=cache_config.section_ttl if cache_config else 1800,
+        )
+
+    async def _get_impl(self, section_id: int) -> Section:
         """Get a specific Help Center section by ID.
+
+        Results are cached based on cache configuration.
 
         Args:
             section_id: The section's ID

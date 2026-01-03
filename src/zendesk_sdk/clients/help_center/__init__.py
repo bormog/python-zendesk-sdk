@@ -1,13 +1,14 @@
 """Help Center API client namespace."""
 
 from functools import cached_property
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from .articles import ArticlesClient
 from .categories import CategoriesClient
 from .sections import SectionsClient
 
 if TYPE_CHECKING:
+    from ...config import CacheConfig
     from ...http_client import HTTPClient
 
 
@@ -51,28 +52,34 @@ class HelpCenterClient:
             await hc.categories.delete(123, force=True)
     """
 
-    def __init__(self, http_client: "HTTPClient") -> None:
+    def __init__(
+        self,
+        http_client: "HTTPClient",
+        cache_config: Optional["CacheConfig"] = None,
+    ) -> None:
         """Initialize Help Center client.
 
         Args:
             http_client: Shared HTTP client instance from main ZendeskClient
+            cache_config: Optional cache configuration
         """
         self._http = http_client
+        self._cache_config = cache_config
 
     @cached_property
     def categories(self) -> CategoriesClient:
         """Access Help Center Categories API."""
-        return CategoriesClient(self._http)
+        return CategoriesClient(self._http, self._cache_config)
 
     @cached_property
     def sections(self) -> SectionsClient:
         """Access Help Center Sections API."""
-        return SectionsClient(self._http)
+        return SectionsClient(self._http, self._cache_config)
 
     @cached_property
     def articles(self) -> ArticlesClient:
         """Access Help Center Articles API."""
-        return ArticlesClient(self._http)
+        return ArticlesClient(self._http, self._cache_config)
 
 
 __all__ = [

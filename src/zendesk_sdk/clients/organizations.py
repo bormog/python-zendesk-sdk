@@ -1,12 +1,14 @@
 """Organizations API client."""
 
-from typing import TYPE_CHECKING, Any, Dict, List
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from ..models import Organization
 from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
 if TYPE_CHECKING:
+    from ..config import CacheConfig
+    from ..http_client import HTTPClient
     from ..pagination import Paginator
 
 
@@ -27,8 +29,24 @@ class OrganizationsClient(BaseClient):
             orgs = await client.organizations.search("acme")
     """
 
-    async def get(self, org_id: int) -> Organization:
+    def __init__(
+        self,
+        http_client: "HTTPClient",
+        cache_config: Optional["CacheConfig"] = None,
+    ) -> None:
+        """Initialize OrganizationsClient with optional caching."""
+        super().__init__(http_client, cache_config)
+        # Set up cached methods
+        self.get: Callable[[int], Organization] = self._create_cached_method(
+            self._get_impl,
+            maxsize=cache_config.org_maxsize if cache_config else 500,
+            ttl=cache_config.org_ttl if cache_config else 600,
+        )
+
+    async def _get_impl(self, org_id: int) -> Organization:
         """Get a specific organization by ID.
+
+        Results are cached based on cache configuration.
 
         Args:
             org_id: The organization's ID

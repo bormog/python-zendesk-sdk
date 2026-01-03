@@ -1,12 +1,14 @@
 """Users API client."""
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from ..models import User
 from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
 if TYPE_CHECKING:
+    from ..config import CacheConfig
+    from ..http_client import HTTPClient
     from ..pagination import Paginator
 
 
@@ -30,8 +32,29 @@ class UsersClient(BaseClient):
             users = await client.users.search("role:admin")
     """
 
-    async def get(self, user_id: int) -> User:
+    def __init__(
+        self,
+        http_client: "HTTPClient",
+        cache_config: Optional["CacheConfig"] = None,
+    ) -> None:
+        """Initialize UsersClient with optional caching."""
+        super().__init__(http_client, cache_config)
+        # Set up cached methods
+        self.get: Callable[[int], User] = self._create_cached_method(
+            self._get_impl,
+            maxsize=cache_config.user_maxsize if cache_config else 1000,
+            ttl=cache_config.user_ttl if cache_config else 300,
+        )
+        self.by_email: Callable[[str], Optional[User]] = self._create_cached_method(
+            self._by_email_impl,
+            maxsize=cache_config.user_maxsize if cache_config else 1000,
+            ttl=cache_config.user_ttl if cache_config else 300,
+        )
+
+    async def _get_impl(self, user_id: int) -> User:
         """Get a specific user by ID.
+
+        Results are cached based on cache configuration.
 
         Args:
             user_id: The user's ID
@@ -53,8 +76,10 @@ class UsersClient(BaseClient):
         """
         return ZendeskPaginator.create_users_paginator(self._http, per_page=per_page)
 
-    async def by_email(self, email: str) -> Optional[User]:
+    async def _by_email_impl(self, email: str) -> Optional[User]:
         """Get a user by email address.
+
+        Results are cached based on cache configuration.
 
         Args:
             email: The user's email address

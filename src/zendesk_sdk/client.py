@@ -84,7 +84,7 @@ class ZendeskClient:
         """
         from .clients import UsersClient
 
-        return UsersClient(self.http_client)
+        return UsersClient(self.http_client, self.config.cache)
 
     @cached_property
     def organizations(self) -> "OrganizationsClient":
@@ -97,7 +97,7 @@ class ZendeskClient:
         """
         from .clients import OrganizationsClient
 
-        return OrganizationsClient(self.http_client)
+        return OrganizationsClient(self.http_client, self.config.cache)
 
     @cached_property
     def tickets(self) -> "TicketsClient":
@@ -184,7 +184,7 @@ class ZendeskClient:
         """
         from .clients import HelpCenterClient
 
-        return HelpCenterClient(self.http_client)
+        return HelpCenterClient(self.http_client, self.config.cache)
 
     # ==================== Low-level HTTP Methods ====================
 
