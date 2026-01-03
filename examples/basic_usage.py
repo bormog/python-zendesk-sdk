@@ -29,32 +29,32 @@ async def main() -> None:
     # Use async context manager for proper resource cleanup
     async with ZendeskClient(config) as client:
         # Get a single user
-        user = await client.get_user(user_id=12345)
+        user = await client.users.get(12345)
         print(f"User: {user.name} ({user.email})")
 
         # Find user by email
-        user_by_email = await client.get_user_by_email("user@example.com")
+        user_by_email = await client.users.by_email("user@example.com")
         if user_by_email:
             print(f"Found user: {user_by_email.name}")
 
         # Get a single ticket
-        ticket = await client.get_ticket(ticket_id=12345)
+        ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject} (status: {ticket.status})")
 
         # Get ticket comments
-        comments = await client.get_ticket_comments(ticket_id=12345)
+        comments = await client.tickets.comments.list(12345)
         print(f"Ticket has {len(comments)} comments")
 
         # Get organization
-        org = await client.get_organization(org_id=123)
+        org = await client.organizations.get(123)
         print(f"Organization: {org.name}")
 
         # Search for tickets
-        open_tickets = await client.search_tickets("status:open")
+        open_tickets = await client.search.tickets("status:open")
         print(f"Found {len(open_tickets)} open tickets")
 
         # Search for users
-        users = await client.search_users("role:admin")
+        users = await client.search.users("role:admin")
         print(f"Found {len(users)} admin users")
 
 

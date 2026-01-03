@@ -9,7 +9,7 @@ class TestPackageImport:
         import zendesk_sdk
 
         assert hasattr(zendesk_sdk, "__version__")
-        assert zendesk_sdk.__version__ == "0.1.2"
+        assert zendesk_sdk.__version__ == "0.2.0"
 
     def test_client_import(self):
         """Test importing ZendeskClient."""

@@ -6,6 +6,7 @@ Modern Python SDK for Zendesk API with async support, full type safety, and comp
 
 - **Async HTTP Client**: Built on httpx with retry logic, rate limiting, and exponential backoff
 - **Type Safety**: Full Pydantic v2 models for Users, Organizations, Tickets, Comments, and Help Center
+- **Namespace Pattern**: Clean API organization (`client.users`, `client.tickets`, `client.help_center`)
 - **Help Center**: Full CRUD for Categories, Sections, and Articles
 - **Pagination**: Both offset-based and cursor-based pagination support
 - **Search**: Zendesk search API support
@@ -32,18 +33,18 @@ async def main():
 
     async with ZendeskClient(config) as client:
         # Get users with pagination
-        users_paginator = await client.get_users(per_page=10)
-        users = await users_paginator.get_page()
+        paginator = await client.users.list(per_page=10)
+        users = await paginator.get_page()
 
         for user in users:
-            print(f"User: {user.name} ({user.email})")
+            print(f"User: {user['name']} ({user['email']})")
 
         # Get specific ticket
-        ticket = await client.get_ticket(ticket_id=12345)
+        ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject}")
 
         # Search tickets
-        results = await client.search_tickets("status:open priority:high")
+        results = await client.search.tickets("status:open priority:high")
         for ticket in results:
             print(f"High priority: {ticket.subject}")
 
@@ -75,32 +76,53 @@ config = ZendeskConfig()  # Will load from environment
 ## API Methods
 
 ### Users
-- `get_users()` - List users with pagination
-- `get_user(user_id)` - Get user by ID
-- `get_user_by_email(email)` - Get user by email
+```python
+user = await client.users.get(user_id)           # Get user by ID
+paginator = await client.users.list()            # List users with pagination
+user = await client.users.by_email(email)        # Get user by email
+users = await client.users.search(query)         # Search users
+users = await client.users.get_many([id1, id2])  # Get multiple users
+```
 
 ### Organizations
-- `get_organizations()` - List organizations with pagination
-- `get_organization(organization_id)` - Get organization by ID
+```python
+org = await client.organizations.get(org_id)     # Get organization by ID
+paginator = await client.organizations.list()    # List organizations
+orgs = await client.organizations.search(query)  # Search organizations
+```
 
 ### Tickets
-- `get_tickets()` - List tickets with pagination
-- `get_ticket(ticket_id)` - Get ticket by ID
-- `get_user_tickets(user_id)` - Get tickets for a user
-- `get_organization_tickets(organization_id)` - Get tickets for an organization
+```python
+ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
+paginator = await client.tickets.list()                # List tickets
+tickets = await client.tickets.for_user(user_id)       # Get user's tickets
+tickets = await client.tickets.for_organization(org_id) # Get org's tickets
+tickets = await client.tickets.search(query)           # Search tickets
+```
+
+### Comments (nested under tickets)
+```python
+comments = await client.tickets.comments.list(ticket_id)
+ticket = await client.tickets.comments.add(ticket_id, body, public=False)
+await client.tickets.comments.make_private(ticket_id, comment_id)
+comment = await client.tickets.comments.redact(ticket_id, comment_id, text)
+```
+
+### Tags (nested under tickets)
+```python
+tags = await client.tickets.tags.get(ticket_id)           # Get tags
+tags = await client.tickets.tags.add(ticket_id, ["vip"])  # Add tags
+tags = await client.tickets.tags.set(ticket_id, ["new"])  # Replace all tags
+tags = await client.tickets.tags.remove(ticket_id, ["old"]) # Remove tags
+```
 
 ### Enriched Tickets
 
 Load tickets with all related data (comments + users) in minimum API requests:
 
-- `get_enriched_ticket(ticket_id)` - Get ticket with comments and all users
-- `search_enriched_tickets(query)` - Search tickets with all related data
-- `get_organization_enriched_tickets(org_id)` - Get organization tickets with all data
-- `get_user_enriched_tickets(user_id)` - Get user tickets with all data
-
 ```python
 # Get ticket with all related data
-enriched = await client.get_enriched_ticket(12345)
+enriched = await client.tickets.get_enriched(12345)
 
 print(f"Ticket: {enriched.ticket.subject}")
 print(f"Requester: {enriched.requester.name}")
@@ -111,152 +133,104 @@ for comment in enriched.comments:
     print(f"Comment by {author.name}: {comment.body[:50]}...")
 
 # Search with all data loaded
-results = await client.search_enriched_tickets("status:open")
+results = await client.tickets.search_enriched("status:open")
 for item in results:
     print(f"{item.ticket.subject} - {len(item.comments)} comments")
 ```
 
-### Comments
-- `get_ticket_comments(ticket_id)` - Get comments for a ticket
-- `add_ticket_comment(ticket_id, body, public=False)` - Add a comment (private by default)
-- `make_comment_private(ticket_id, comment_id)` - Convert public comment to internal note
-- `redact_comment_string(ticket_id, comment_id, text)` - Permanently redact text from comment
-
-### Tags
-- `get_ticket_tags(ticket_id)` - Get all tags for a ticket
-- `add_ticket_tags(ticket_id, tags)` - Add tags without removing existing ones
-- `set_ticket_tags(ticket_id, tags)` - Replace all tags with a new set
-- `remove_ticket_tags(ticket_id, tags)` - Remove specific tags
-
-```python
-# Get current tags
-tags = await client.get_ticket_tags(12345)
-# ["billing", "urgent"]
-
-# Add new tags (keeps existing)
-tags = await client.add_ticket_tags(12345, ["vip"])
-# ["billing", "urgent", "vip"]
-
-# Replace all tags
-tags = await client.set_ticket_tags(12345, ["support", "priority"])
-# ["support", "priority"]
-
-# Remove specific tags
-tags = await client.remove_ticket_tags(12345, ["priority"])
-# ["support"]
-```
-
 ### Attachments
-- `download_attachment(content_url)` - Download attachment content as bytes
-- `upload_attachment(data, filename, content_type)` - Upload file and get token
-
 ```python
-# Download an attachment from a comment
-comments = await client.get_ticket_comments(12345)
-for comment in comments:
-    for attachment in comment.attachments or []:
-        content = await client.download_attachment(attachment.content_url)
-        with open(attachment.file_name, "wb") as f:
-            f.write(content)
+content = await client.attachments.download(content_url)  # Download file
+token = await client.attachments.upload(data, filename, content_type)  # Upload file
 
-# Upload a file and attach to a comment
-with open("screenshot.png", "rb") as f:
-    token = await client.upload_attachment(
-        f.read(),
-        "screenshot.png",
-        "image/png"
-    )
-
-await client.add_ticket_comment(
-    ticket_id=12345,
-    body="See attached screenshot",
-    uploads=[token]
-)
+# Attach to comment
+await client.tickets.comments.add(ticket_id, "See attached", uploads=[token])
 ```
 
 ### Search
-- `search(query)` - General search
-- `search_users(query)` - Search users
-- `search_tickets(query)` - Search tickets
-- `search_organizations(query)` - Search organizations
+```python
+paginator = await client.search.all(query)        # General search
+tickets = await client.search.tickets(query)      # Search tickets
+users = await client.search.users(query)          # Search users
+orgs = await client.search.organizations(query)   # Search organizations
+```
 
 ### Help Center
 
 Access Help Center (Guide) via `client.help_center` namespace:
 
 #### Categories
-- `get_categories()` - List categories with pagination
-- `get_category(category_id)` - Get category by ID
-- `create_category(name, description, position)` - Create category
-- `update_category(category_id, ...)` - Update category
-- `delete_category(category_id, force=True)` - Delete category (cascade deletes sections/articles)
+```python
+cat = await client.help_center.categories.get(category_id)
+paginator = await client.help_center.categories.list()
+cat = await client.help_center.categories.create(name, description)
+cat = await client.help_center.categories.update(category_id, name=new_name)
+await client.help_center.categories.delete(category_id, force=True)
+```
 
 #### Sections
-- `get_sections()` - List all sections with pagination
-- `get_category_sections(category_id)` - List sections in a category
-- `get_section(section_id)` - Get section by ID
-- `create_section(category_id, name, description, position)` - Create section
-- `update_section(section_id, ...)` - Update section
-- `delete_section(section_id, force=True)` - Delete section (cascade deletes articles)
+```python
+sec = await client.help_center.sections.get(section_id)
+paginator = await client.help_center.sections.list()
+paginator = await client.help_center.sections.for_category(category_id)
+sec = await client.help_center.sections.create(category_id, name, description)
+sec = await client.help_center.sections.update(section_id, name=new_name)
+await client.help_center.sections.delete(section_id, force=True)
+```
 
 #### Articles
-- `get_articles()` - List all articles with pagination
-- `get_section_articles(section_id)` - List articles in a section
-- `get_category_articles(category_id)` - List articles in a category
-- `get_article(article_id)` - Get article by ID
-- `create_article(section_id, title, body, ...)` - Create article
-- `update_article(article_id, ...)` - Update article
-- `delete_article(article_id)` - Delete article
-- `search_articles(query, ...)` - Full-text search with snippets
+```python
+art = await client.help_center.articles.get(article_id)
+paginator = await client.help_center.articles.list()
+paginator = await client.help_center.articles.for_section(section_id)
+paginator = await client.help_center.articles.for_category(category_id)
+results = await client.help_center.articles.search(query)
+art = await client.help_center.articles.create(section_id, title, body=html)
+art = await client.help_center.articles.update(article_id, title=new_title)
+await client.help_center.articles.delete(article_id)
+```
 
+#### Example
 ```python
 async with ZendeskClient(config) as client:
     hc = client.help_center
 
+    # Get permission_group_id from existing article (required for article creation)
+    existing = await (await hc.articles.list(per_page=1)).get_page()
+    article_details = await hc.articles.get(existing[0]["id"])
+    permission_group_id = article_details.permission_group_id
+
     # Create category -> section -> article hierarchy
-    category = await hc.create_category(
+    category = await hc.categories.create(
         name="Product Documentation",
         description="Help articles for our product"
     )
 
-    section = await hc.create_section(
-        category_id=category.id,
-        name="Getting Started"
+    section = await hc.sections.create(
+        category.id,
+        "Getting Started"
     )
 
-    article = await hc.create_article(
-        section_id=section.id,
+    article = await hc.articles.create(
+        section.id,
         title="Installation Guide",
         body="<h1>Installation</h1><p>Follow these steps...</p>",
-        permission_group_id=252606,  # Required
-        draft=False,  # Publish immediately
+        permission_group_id=permission_group_id,
+        draft=True,
         label_names=["installation", "guide"],
     )
 
     # Search articles (useful for AI assistants)
-    results = await hc.search_articles("password reset")
+    results = await hc.articles.search("password reset")
     for article in results:
         print(f"{article.title}")
         print(f"Snippet: {article.snippet}")  # Matching text with <em> tags
 
-    # Paginate through all articles
-    paginator = await hc.get_articles(per_page=50)
-    async for article_data in paginator:
-        print(article_data["title"])
-
-    # Update article
-    await hc.update_article(
-        article.id,
-        title="Updated Title",
-        promoted=True,
-        label_names=["updated", "featured"],
-    )
-
     # Cascade delete (removes category + all sections + all articles)
-    await hc.delete_category(category.id, force=True)
+    await hc.categories.delete(category.id, force=True)
 ```
 
-> **Note**: `delete_category()` and `delete_section()` require `force=True` as a safety measure since they cascade delete all child content.
+> **Note**: `delete()` for categories and sections requires `force=True` as a safety measure since they cascade delete all child content.
 
 ## Error Handling
 
@@ -273,7 +247,7 @@ from zendesk_sdk.exceptions import (
 
 async with ZendeskClient(config) as client:
     try:
-        user = await client.get_user(user_id=12345)
+        user = await client.users.get(12345)
     except ZendeskAuthException as e:
         # 401/403 - Authentication failed
         print(f"Auth error: {e.message}")

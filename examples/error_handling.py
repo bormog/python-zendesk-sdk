@@ -32,7 +32,7 @@ async def main() -> None:
     async with ZendeskClient(config) as client:
         try:
             # Try to get a user that might not exist
-            user = await client.get_user(user_id=999999999)
+            user = await client.users.get(999999999)
             print(f"User: {user.name}")
 
         except ZendeskAuthException as e:
@@ -69,7 +69,7 @@ async def main() -> None:
 
         # Example: Handling specific HTTP status codes
         try:
-            ticket = await client.get_ticket(ticket_id=123)
+            ticket = await client.tickets.get(123)
         except ZendeskHTTPException as e:
             if e.status_code == 404:
                 print("Ticket not found")
@@ -92,7 +92,7 @@ async def retry_with_backoff() -> None:
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
-                result = await client.search_tickets("status:open")
+                result = await client.search.tickets("status:open")
                 print(f"Found {len(result)} tickets")
                 break
             except ZendeskRateLimitException as e:

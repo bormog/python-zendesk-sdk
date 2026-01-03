@@ -21,7 +21,7 @@ async def main() -> None:
     async with ZendeskClient(config) as client:
         # Get a single ticket with all related data
         # This makes 2 API calls: ticket + comments (with sideloaded users)
-        enriched = await client.get_enriched_ticket(ticket_id=12345)
+        enriched = await client.tickets.get_enriched(12345)
 
         print(f"Ticket: {enriched.ticket.subject}")
         print(f"Status: {enriched.ticket.status}")
@@ -42,15 +42,16 @@ async def main() -> None:
         print(f"\nComments ({len(enriched.comments)}):")
         for comment in enriched.comments:
             author = enriched.get_comment_author(comment)
+            body_preview = (comment.body[:50] + "...") if comment.body else "(no body)"
             if author:
-                print(f"  - {author.name}: {comment.body[:50]}...")
+                print(f"  - {author.name}: {body_preview}")
             else:
-                print(f"  - Unknown: {comment.body[:50]}...")
+                print(f"  - Unknown: {body_preview}")
 
         # Search for tickets and load all related data
         # This efficiently batch-loads users using show_many endpoint
         print("\n--- Searching tickets with enriched data ---")
-        results = await client.search_enriched_tickets(
+        results = await client.tickets.search_enriched(
             query="status:open priority:high",
             per_page=10,
         )
@@ -63,7 +64,7 @@ async def main() -> None:
 
         # Get organization tickets with all related data
         print("\n--- Organization tickets ---")
-        org_tickets = await client.get_organization_enriched_tickets(
+        org_tickets = await client.tickets.for_organization_enriched(
             org_id=123,
             per_page=10,
         )
@@ -73,7 +74,7 @@ async def main() -> None:
 
         # Get user's tickets with all related data
         print("\n--- User tickets ---")
-        user_tickets = await client.get_user_enriched_tickets(
+        user_tickets = await client.tickets.for_user_enriched(
             user_id=456,
             per_page=10,
         )

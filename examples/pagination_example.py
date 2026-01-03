@@ -20,7 +20,7 @@ async def main() -> None:
 
     async with ZendeskClient(config) as client:
         # Get paginated list of users
-        paginator = await client.get_users(per_page=50)
+        paginator = await client.users.list(per_page=50)
 
         # Get first page
         first_page = await paginator.get_page()
@@ -37,7 +37,7 @@ async def main() -> None:
 
         # Iterate through all users (all pages)
         all_users_count = 0
-        paginator = await client.get_users(per_page=100)
+        paginator = await client.users.list(per_page=100)
         async for user_data in paginator:
             all_users_count += 1
             # Process each user
@@ -46,13 +46,13 @@ async def main() -> None:
         print(f"Total users across all pages: {all_users_count}")
 
         # Similarly for tickets
-        ticket_paginator = await client.get_tickets(per_page=100)
+        ticket_paginator = await client.tickets.list(per_page=100)
         async for ticket_data in ticket_paginator:
             # Process each ticket
             pass
 
         # Search with pagination
-        search_paginator = await client.search(
+        search_paginator = await client.search.all(
             query="type:ticket status:open",
             per_page=100,
         )
