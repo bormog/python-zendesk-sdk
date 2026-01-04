@@ -111,14 +111,12 @@ user = await client.users.get(user_id)           # Get user by ID
 paginator = await client.users.list()            # List users with pagination
 user = await client.users.by_email(email)        # Get user by email
 users = await client.users.get_many([id1, id2])  # Get multiple users
-# For search use client.search.users() - see Search section below
 ```
 
 ### Organizations
 ```python
 org = await client.organizations.get(org_id)     # Get organization by ID
 paginator = await client.organizations.list()    # List organizations
-# For search use client.search.organizations() - see Search section below
 ```
 
 ### Tickets
@@ -127,7 +125,6 @@ ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
 paginator = await client.tickets.list()                # List tickets
 tickets = await client.tickets.for_user(user_id)       # Get user's tickets
 tickets = await client.tickets.for_organization(org_id) # Get org's tickets
-# For search use client.search.tickets() - see Search section below
 ```
 
 ### Comments (nested under tickets)
