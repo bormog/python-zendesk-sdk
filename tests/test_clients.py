@@ -83,7 +83,6 @@ class TestUsersClient:
 
             assert result is None
 
-
     @pytest.mark.asyncio
     async def test_get_many(self):
         """Test get multiple users."""

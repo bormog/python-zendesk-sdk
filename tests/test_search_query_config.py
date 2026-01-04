@@ -7,8 +7,6 @@ https://support.zendesk.com/hc/en-us/articles/203663226
 
 from datetime import date, datetime
 
-import pytest
-
 from zendesk_sdk.models.search import (
     SearchQueryConfig,
     SearchType,

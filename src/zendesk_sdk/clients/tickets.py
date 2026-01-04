@@ -421,9 +421,7 @@ class TicketsClient(BaseClient):
             enriched = [e async for e in client.tickets.search_enriched(config)]
         """
         full_query = self._resolve_query(query)
-        paginator = ZendeskPaginator.create_search_paginator(
-            self._http, query=full_query, per_page=per_page
-        )
+        paginator = ZendeskPaginator.create_search_paginator(self._http, query=full_query, per_page=per_page)
 
         count = 0
         async for page_data in self._paginate_enriched(paginator):
@@ -444,9 +442,7 @@ class TicketsClient(BaseClient):
                 if limit and count >= limit:
                     return
 
-    async def _paginate_enriched(
-        self, paginator: "Paginator[Dict[str, Any]]"
-    ) -> AsyncIterator[List[Dict[str, Any]]]:
+    async def _paginate_enriched(self, paginator: "Paginator[Dict[str, Any]]") -> AsyncIterator[List[Dict[str, Any]]]:
         """Yield pages of raw ticket data for batch enrichment."""
         while True:
             try:

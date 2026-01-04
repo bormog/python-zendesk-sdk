@@ -1,6 +1,6 @@
 """Organizations API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
 from ..models import Organization
 from ..pagination import ZendeskPaginator
@@ -66,4 +66,3 @@ class OrganizationsClient(BaseClient):
             Paginator for iterating through all organizations
         """
         return ZendeskPaginator.create_organizations_paginator(self._http, per_page=per_page)
-

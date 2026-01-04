@@ -10,6 +10,27 @@
 
 Modern Python SDK for Zendesk API, designed for automation and AI agents.
 
+## Table of Contents
+
+- [Why This SDK?](#why-this-sdk)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [API Methods](#api-methods)
+  - [Users](#users)
+  - [Organizations](#organizations)
+  - [Tickets](#tickets)
+  - [Comments](#comments-nested-under-tickets)
+  - [Tags](#tags-nested-under-tickets)
+  - [Enriched Tickets](#enriched-tickets)
+  - [Attachments](#attachments)
+  - [Search](#search)
+  - [Help Center](#help-center)
+- [Error Handling](#error-handling)
+- [Caching](#caching)
+- [Examples](#examples)
+
 ## Why This SDK?
 
 Zendesk has a powerful REST API, but using it directly is painful:
@@ -21,27 +42,27 @@ Zendesk has a powerful REST API, but using it directly is painful:
 **This SDK solves these problems** with a clean, typed interface optimized for:
 
 - **Support automation** — workflows, triggers, integrations
-- **LLM agents** — Claude Code, Codex, custom AI assistants that need structured Zendesk access
 - **Internal tools** — dashboards, reports, bulk operations
+- **LLM agents** — Claude Code, Codex, custom AI assistants that need structured Zendesk access
 
 ### Developer Experience
 
 - **Predictable structure** — typed Pydantic models instead of arbitrary dicts
 - **Complete context in one call** — `get_enriched()` returns ticket + all comments + all users
-- **Minimal API calls** — built-in caching reduces redundant requests
+- **No boilerplate** — pagination, caching, and object loading handled automatically
+- **Minimal API calls** — built-in caching and batching reduce redundant requests
 - **Clear namespaces** — `client.tickets.comments.add()` is self-documenting
 
 ## Features
 
-- **Async HTTP Client**: Built on httpx with retry logic, rate limiting, and exponential backoff
-- **Type Safety**: Full Pydantic v2 models for Users, Organizations, Tickets, Comments, and Help Center
-- **Namespace Pattern**: Clean API organization (`client.users`, `client.tickets`, `client.help_center`)
-- **Caching**: Built-in TTL-based caching for users, organizations, and Help Center content
+- **Type Safety**: Full Pydantic v2 models for all Zendesk entities
+- **Namespace Pattern**: Clean API — `client.users`, `client.tickets`, `client.help_center`
+- **Search**: Raw queries + type-safe SearchQueryConfig, export methods for large datasets
+- **Pagination**: Offset-based and cursor-based (export) with async iterators
+- **Caching**: TTL-based caching for users, organizations, and Help Center
 - **Help Center**: Full CRUD for Categories, Sections, and Articles
-- **Pagination**: Both offset-based and cursor-based (export) pagination support
-- **Search**: Type-safe SearchQueryConfig + raw query strings, with export methods for stable pagination
-- **Human-readable output**: All models have `__str__` methods for easy printing
-- **Configuration**: Flexible configuration with environment variable support
+- **Async HTTP**: Built on httpx with retry logic, rate limiting, exponential backoff
+- **Configuration**: Environment variables or direct instantiation
 
 ## Installation
 
