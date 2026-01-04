@@ -25,8 +25,7 @@ class OrganizationsClient(BaseClient):
             async for org_data in paginator:
                 print(org_data["name"])
 
-            # Search organizations
-            orgs = await client.organizations.search("acme")
+            # For search use client.search.organizations()
     """
 
     def __init__(
@@ -68,17 +67,3 @@ class OrganizationsClient(BaseClient):
         """
         return ZendeskPaginator.create_organizations_paginator(self._http, per_page=per_page)
 
-    async def search(self, query: str, per_page: int = 100) -> List[Organization]:
-        """Search for organizations.
-
-        Args:
-            query: Search query string
-            per_page: Number of results per page (max 100)
-
-        Returns:
-            List of Organization objects
-        """
-        full_query = f"type:organization {query}"
-        response = await self._get("search.json", params={"query": full_query, "per_page": per_page})
-        results = response.get("results", [])
-        return [Organization(**result) for result in results if result.get("result_type") == "organization"]

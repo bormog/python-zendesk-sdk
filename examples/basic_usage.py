@@ -49,13 +49,16 @@ async def main() -> None:
         org = await client.organizations.get(123)
         print(f"Organization: {org.name}")
 
-        # Search for tickets
-        open_tickets = await client.search.tickets("status:open")
-        print(f"Found {len(open_tickets)} open tickets")
+        # Search for tickets (returns async iterator)
+        count = 0
+        async for ticket in client.search.tickets("status:open", limit=10):
+            count += 1
+            print(f"  Open ticket: {ticket.subject}")
+        print(f"Found {count} open tickets (limited to 10)")
 
-        # Search for users
-        users = await client.search.users("role:admin")
-        print(f"Found {len(users)} admin users")
+        # Search for users (returns async iterator)
+        admins = [u async for u in client.search.users("role:admin", limit=5)]
+        print(f"Found {len(admins)} admin users (limited to 5)")
 
 
 if __name__ == "__main__":

@@ -1,6 +1,30 @@
 # Python Zendesk SDK
 
-Modern Python SDK for Zendesk API with async support, full type safety, and comprehensive error handling.
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/python-zendesk-sdk?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/python-zendesk-sdk)
+
+Modern Python SDK for Zendesk API, designed for automation and AI agents.
+
+## Why This SDK?
+
+Zendesk has a powerful REST API, but using it directly is painful:
+- Multiple API calls needed to get complete ticket context (ticket + comments + users)
+- No type safety — just raw JSON dictionaries
+- Manual pagination handling
+- Boilerplate retry/rate-limit logic in every project
+
+**This SDK solves these problems** with a clean, typed interface optimized for:
+
+- **Support automation** — workflows, triggers, integrations
+- **LLM agents** — Claude Code, Codex, custom AI assistants that need structured Zendesk access
+- **Internal tools** — dashboards, reports, bulk operations
+
+### Built for AI Agents
+
+When an LLM agent needs to work with Zendesk, it needs:
+- **Predictable structure** — typed models instead of arbitrary dicts
+- **Complete context in one call** — `get_enriched()` returns ticket + all comments + all users
+- **Minimal API calls** — built-in caching reduces redundant requests
+- **Clear namespaces** — `client.tickets.comments.add()` is self-documenting
 
 ## Features
 
@@ -9,8 +33,9 @@ Modern Python SDK for Zendesk API with async support, full type safety, and comp
 - **Namespace Pattern**: Clean API organization (`client.users`, `client.tickets`, `client.help_center`)
 - **Caching**: Built-in TTL-based caching for users, organizations, and Help Center content
 - **Help Center**: Full CRUD for Categories, Sections, and Articles
-- **Pagination**: Both offset-based and cursor-based pagination support
-- **Search**: Zendesk search API support
+- **Pagination**: Both offset-based and cursor-based (export) pagination support
+- **Search**: Type-safe SearchQueryConfig + raw query strings, with export methods for stable pagination
+- **Human-readable output**: All models have `__str__` methods for easy printing
 - **Configuration**: Flexible configuration with environment variable support
 
 ## Installation
@@ -44,9 +69,8 @@ async def main():
         ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject}")
 
-        # Search tickets
-        results = await client.search.tickets("status:open priority:high")
-        for ticket in results:
+        # Search tickets (async iterator with auto-pagination)
+        async for ticket in client.search.tickets("status:open priority:high", limit=10):
             print(f"High priority: {ticket.subject}")
 
 asyncio.run(main())
@@ -81,15 +105,15 @@ config = ZendeskConfig()  # Will load from environment
 user = await client.users.get(user_id)           # Get user by ID
 paginator = await client.users.list()            # List users with pagination
 user = await client.users.by_email(email)        # Get user by email
-users = await client.users.search(query)         # Search users
 users = await client.users.get_many([id1, id2])  # Get multiple users
+# For search use client.search.users() - see Search section below
 ```
 
 ### Organizations
 ```python
 org = await client.organizations.get(org_id)     # Get organization by ID
 paginator = await client.organizations.list()    # List organizations
-orgs = await client.organizations.search(query)  # Search organizations
+# For search use client.search.organizations() - see Search section below
 ```
 
 ### Tickets
@@ -98,7 +122,7 @@ ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
 paginator = await client.tickets.list()                # List tickets
 tickets = await client.tickets.for_user(user_id)       # Get user's tickets
 tickets = await client.tickets.for_organization(org_id) # Get org's tickets
-tickets = await client.tickets.search(query)           # Search tickets
+# For search use client.search.tickets() - see Search section below
 ```
 
 ### Comments (nested under tickets)
@@ -122,6 +146,8 @@ tags = await client.tickets.tags.remove(ticket_id, ["old"]) # Remove tags
 Load tickets with all related data (comments + users) in minimum API requests:
 
 ```python
+from zendesk_sdk import SearchQueryConfig
+
 # Get ticket with all related data
 enriched = await client.tickets.get_enriched(12345)
 
@@ -133,9 +159,15 @@ for comment in enriched.comments:
     author = enriched.get_comment_author(comment)
     print(f"Comment by {author.name}: {comment.body[:50]}...")
 
-# Search with all data loaded
-results = await client.tickets.search_enriched("status:open")
-for item in results:
+# Search with all data loaded (using SearchQueryConfig)
+config = SearchQueryConfig.tickets(
+    status=["open"],
+    priority=["high", "urgent"],
+    organization_id=12345,
+)
+
+# search_enriched returns async iterator
+async for item in client.tickets.search_enriched(config, limit=10):
     print(f"{item.ticket.subject} - {len(item.comments)} comments")
 ```
 
@@ -149,12 +181,119 @@ await client.tickets.comments.add(ticket_id, "See attached", uploads=[token])
 ```
 
 ### Search
+
+All search methods return **async iterators** with automatic pagination.
+
+#### Raw Queries (Zendesk syntax)
+
+Use the same query syntax as in Zendesk UI — it just works:
+
 ```python
-paginator = await client.search.all(query)        # General search
-tickets = await client.search.tickets(query)      # Search tickets
-users = await client.search.users(query)          # Search users
-orgs = await client.search.organizations(query)   # Search organizations
+# Tickets
+async for ticket in client.search.tickets("status:open priority:high"):
+    print(ticket.subject)
+
+# Users
+async for user in client.search.users("role:admin"):
+    print(user.name)
+
+# Organizations
+async for org in client.search.organizations("tags:enterprise"):
+    print(org.name)
+
+# Collect to list
+all_tickets = [t async for t in client.search.tickets("status:pending", limit=100)]
+
+# Search with enrichment (loads comments + users)
+async for item in client.tickets.search_enriched("status:open", limit=10):
+    print(f"{item.ticket.subject} - {len(item.comments)} comments")
 ```
+
+#### SearchQueryConfig (typed alternative)
+
+Don't want to memorize Zendesk query syntax? Use `SearchQueryConfig` — your IDE will autocomplete available fields:
+
+```python
+from zendesk_sdk import SearchQueryConfig
+
+config = SearchQueryConfig.tickets(
+    status=["open", "pending"],
+    priority=["high", "urgent"],
+    organization_id=12345,
+    created_after=date(2024, 1, 1),
+    tags=["vip"],
+    exclude_tags=["spam"],
+)
+async for ticket in client.search.tickets(config):
+    print(ticket.subject)
+
+config = SearchQueryConfig.users(
+    role=["admin", "agent"],
+    is_verified=True,
+)
+async for user in client.search.users(config):
+    print(user.name)
+
+config = SearchQueryConfig.organizations(tags=["enterprise"])
+async for org in client.search.organizations(config):
+    print(org.name)
+```
+
+<details>
+<summary>Available SearchQueryConfig fields</summary>
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | SearchType | TICKET (default), USER, ORGANIZATION |
+| `status` | List[str] | new, open, pending, hold, solved, closed |
+| `priority` | List[str] | low, normal, high, urgent |
+| `ticket_type` | List[str] | question, incident, problem, task |
+| `organization_id` | int | Filter by organization |
+| `requester_id` | int\|"me"\|"none" | Filter by requester |
+| `assignee_id` | int\|"me"\|"none" | Filter by assignee |
+| `group_id` | int | Filter by group |
+| `tags` | List[str] | Include items with tags (OR) |
+| `exclude_tags` | List[str] | Exclude items with tags |
+| `created_after` | date | Created after date |
+| `created_before` | date | Created before date |
+| `updated_after` | date | Updated after date |
+| `updated_before` | date | Updated before date |
+| `via` | List[str] | Channel: email, web, chat, api, phone |
+| `custom_fields` | Dict[int, Any] | Custom field values |
+| `order_by` | str | Sort field |
+| `sort` | str | asc or desc |
+
+</details>
+
+#### Export Search (No Zendesk Limit)
+
+Regular search is capped at 1000 results by Zendesk. Export endpoint has **no such limit**:
+
+```python
+# Export fetches ALL matching entities (no 1000 limit)
+async for ticket in client.search.export_tickets("status:open"):
+    print(ticket.subject)  # Will iterate through ALL open tickets
+
+async for user in client.search.export_users():
+    print(user.name)  # ALL users
+
+async for org in client.search.export_organizations():
+    print(org.name)  # ALL organizations
+
+# Works with SearchQueryConfig too
+config = SearchQueryConfig.tickets(status=["open"], priority=["high"])
+async for ticket in client.search.export_tickets(config):
+    print(ticket.subject)
+
+# With limit if you don't need everything
+async for ticket in client.search.export_tickets("priority:high", limit=500):
+    print(ticket.subject)
+```
+
+| Method | Zendesk Limit | Pagination | Duplicates |
+|--------|---------------|------------|------------|
+| `search.tickets()` | 1000 max | Offset | Possible |
+| `search.export_tickets()` | None | Cursor | None |
 
 ### Help Center
 
@@ -343,6 +482,7 @@ client.users.get.cache_invalidate(user_id)
 
 See the `examples/` directory for complete usage examples:
 - `basic_usage.py` - Basic configuration and API operations
+- `search.py` - Type-safe search with SearchQueryConfig
 - `pagination_example.py` - Working with paginated results
 - `error_handling.py` - Error handling patterns
 - `enriched_tickets.py` - Loading tickets with related data

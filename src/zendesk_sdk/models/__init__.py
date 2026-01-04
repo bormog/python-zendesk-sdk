@@ -5,6 +5,16 @@ from .comment import Comment, CommentAttachment, CommentMetadata, CommentVia
 from .enriched_ticket import EnrichedTicket
 from .help_center import Article, Category, Section
 from .organization import Organization, OrganizationField, OrganizationSubscription
+from .search import (
+    SearchQueryConfig,
+    SearchType,
+    SortOrder,
+    TicketChannel,
+    TicketPriority,
+    TicketStatus,
+    TicketType,
+    UserRole,
+)
 from .ticket import (
     SatisfactionRating,
     Ticket,
@@ -45,4 +55,13 @@ __all__ = [
     "Category",
     "Section",
     "Article",
+    # Search models
+    "SearchQueryConfig",
+    "SearchType",
+    "TicketStatus",
+    "TicketPriority",
+    "TicketType",
+    "TicketChannel",
+    "UserRole",
+    "SortOrder",
 ]

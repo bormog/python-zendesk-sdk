@@ -122,6 +122,13 @@ class Ticket(ZendeskModel):
     via: Optional[TicketVia] = Field(None, description="A record of the channel the ticket was created through")
     generated_timestamp: Optional[int] = Field(None, description="Unix timestamp of when this record was last updated")
 
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        subject = (self.subject or "")[:80]
+        status = self.status or "unknown"
+        priority = self.priority or "-"
+        return f"#{self.id} | {status} | {priority} | {subject}"
+
 
 class TicketField(ZendeskModel):
     """Zendesk Ticket Field model."""

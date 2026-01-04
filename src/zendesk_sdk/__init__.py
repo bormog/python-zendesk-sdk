@@ -5,7 +5,7 @@ This package provides a clean, async-first interface to the Zendesk API
 with full type safety and comprehensive error handling.
 """
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from .client import ZendeskClient
 from .clients import (
@@ -29,7 +29,20 @@ from .exceptions import (
     ZendeskPaginationException,
     ZendeskRateLimitException,
 )
-from .models import Article, Category, EnrichedTicket, Section
+from .models import (
+    Article,
+    Category,
+    EnrichedTicket,
+    SearchQueryConfig,
+    SearchType,
+    Section,
+    SortOrder,
+    TicketChannel,
+    TicketPriority,
+    TicketStatus,
+    TicketType,
+    UserRole,
+)
 
 __all__ = [
     # Main client
@@ -54,6 +67,15 @@ __all__ = [
     "Category",
     "Section",
     "Article",
+    # Search
+    "SearchQueryConfig",
+    "SearchType",
+    "TicketStatus",
+    "TicketPriority",
+    "TicketType",
+    "TicketChannel",
+    "UserRole",
+    "SortOrder",
     # Exceptions
     "ZendeskBaseException",
     "ZendeskHTTPException",

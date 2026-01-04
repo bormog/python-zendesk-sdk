@@ -51,12 +51,7 @@ async def main() -> None:
         # Search for tickets and load all related data
         # This efficiently batch-loads users using show_many endpoint
         print("\n--- Searching tickets with enriched data ---")
-        results = await client.tickets.search_enriched(
-            query="status:open priority:high",
-            per_page=10,
-        )
-
-        for item in results:
+        async for item in client.tickets.search_enriched("status:open priority:high", limit=10):
             print(f"\nTicket #{item.ticket.id}: {item.ticket.subject}")
             print(f"  Requester: {item.requester.name if item.requester else 'N/A'}")
             print(f"  Assignee: {item.assignee.name if item.assignee else 'Unassigned'}")

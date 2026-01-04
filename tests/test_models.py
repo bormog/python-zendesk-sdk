@@ -446,28 +446,29 @@ class TestModelValidation:
 class TestZendeskModelStrRepr:
     """Test __str__ and __repr__ methods of ZendeskModel."""
 
-    def test_str_with_id_field(self):
-        """Test __str__ method with id field."""
-        user = User(id=123, name="Test User")
+    def test_user_str(self):
+        """Test User __str__ method."""
+        user = User(id=123, name="Test User", email="test@example.com", role="agent")
         result = str(user)
-        assert "User" in result
-        assert "id=123" in result
+        assert "Test User" in result
+        assert "test@example.com" in result
+        assert "agent" in result
 
-    def test_str_with_name_field(self):
-        """Test __str__ method with name field but no id."""
-        user = User(name="Test User")
-        result = str(user)
-        assert "User" in result
-        # id field is checked first, so id=None is shown even if name exists
-        assert "id=None" in result
-
-    def test_str_with_subject_field(self):
-        """Test __str__ method with subject field."""
-        ticket = Ticket(subject="Test Subject")
+    def test_ticket_str(self):
+        """Test Ticket __str__ method."""
+        ticket = Ticket(id=456, subject="Test Subject", status="open", priority="high")
         result = str(ticket)
-        assert "Ticket" in result
-        # id field is checked first, so id=None is shown
-        assert "id=None" in result
+        assert "#456" in result
+        assert "open" in result
+        assert "high" in result
+        assert "Test Subject" in result
+
+    def test_organization_str(self):
+        """Test Organization __str__ method."""
+        org = Organization(id=789, name="Acme Corp")
+        result = str(org)
+        assert "Acme Corp" in result
+        assert "789" in result
 
     def test_repr_method(self):
         """Test __repr__ method."""

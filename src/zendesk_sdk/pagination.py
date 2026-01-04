@@ -105,6 +105,8 @@ class Paginator(ABC, Generic[T]):
 
     async def __aiter__(self) -> AsyncIterator[T]:
         """Async iterator over all items across all pages."""
+        from .exceptions import ZendeskHTTPException
+
         self._current_page = 1
 
         while True:
@@ -119,6 +121,14 @@ class Paginator(ABC, Generic[T]):
 
                 self._advance_to_next_page()
 
+            except ZendeskHTTPException as e:
+                # Zendesk Search API returns 422 after ~1000 results (page 11+)
+                # This is a known limitation, not an error
+                if e.status_code == 422:
+                    break
+                raise ZendeskPaginationException(
+                    f"Error during pagination: {str(e)}", {"page": self._current_page, "per_page": self.per_page}
+                )
             except Exception as e:
                 raise ZendeskPaginationException(
                     f"Error during pagination: {str(e)}", {"page": self._current_page, "per_page": self.per_page}
@@ -238,6 +248,68 @@ class CursorPaginator(Paginator[T]):
         pass
 
 
+class SearchExportPaginator(CursorPaginator[Dict[str, Any]]):
+    """Cursor-based paginator for /search/export endpoint.
+
+    This endpoint:
+    - Uses cursor pagination (no duplicates)
+    - Requires filter[type] parameter
+    - Uses page[size] instead of per_page
+    - Returns links.next and meta.after_cursor
+    - Cursor expires after 1 hour
+    """
+
+    def __init__(self, http_client: Any, query: str, filter_type: str, page_size: int = 100) -> None:
+        super().__init__(http_client, "search/export.json", per_page=page_size)
+        self.query = query
+        self.filter_type = filter_type
+        self._next_url: Optional[str] = None
+
+    def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
+        return response.get("results", [])
+
+    def _update_pagination_state(self, response: Dict[str, Any]) -> bool:
+        """Update cursor-based pagination state from export response."""
+        # Export uses different structure: links.next and meta.has_more
+        links = response.get("links", {})
+        meta = response.get("meta", {})
+
+        self._next_url = links.get("next")
+        self._next_cursor = meta.get("after_cursor")
+
+        # Update pagination info
+        self._pagination_info = PaginationInfo(
+            has_more=meta.get("has_more", False),
+            next_page=self._next_url,
+        )
+
+        self._has_started = True
+        return self._has_more_pages()
+
+    def _get_page_params(self) -> Dict[str, Any]:
+        """Get export-specific page parameters."""
+        params: Dict[str, Any] = {
+            "query": self.query,
+            "filter[type]": self.filter_type,
+            "page[size]": self.per_page,
+        }
+
+        if self._next_cursor and self._has_started:
+            params["page[after]"] = self._next_cursor
+
+        return params
+
+    def _has_more_pages(self) -> bool:
+        """Check if more pages available."""
+        if not self._has_started:
+            return True
+
+        if self._pagination_info and self._pagination_info.has_more is not None:
+            return self._pagination_info.has_more
+
+        return self._next_cursor is not None
+
+
 class ZendeskPaginator:
     """Factory for creating Zendesk-specific paginators."""
 
@@ -280,6 +352,23 @@ class ZendeskPaginator:
                 return response.get("results", [])
 
         return SearchPaginator(http_client, "search.json", params={"query": query}, per_page=per_page)
+
+    @staticmethod
+    def create_search_export_paginator(
+        http_client: Any, query: str, filter_type: str, page_size: int = 100
+    ) -> "SearchExportPaginator":
+        """Create cursor-based paginator for search export endpoint.
+
+        Args:
+            http_client: HTTP client instance
+            query: Search query string
+            filter_type: Object type to filter (ticket, user, organization, group)
+            page_size: Results per page (max 1000, recommended 100)
+
+        Returns:
+            SearchExportPaginator for cursor-based iteration
+        """
+        return SearchExportPaginator(http_client, query, filter_type, page_size)
 
     @staticmethod
     def create_incremental_paginator(

@@ -83,6 +83,12 @@ class User(ZendeskModel):
     report_csv: Optional[bool] = Field(None, description="Inert parameter for CSV report access")
     user_fields: Optional[Dict[str, Any]] = Field(None, description="Custom user field values")
 
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        email = f" <{self.email}>" if self.email else ""
+        role = f" ({self.role})" if self.role else ""
+        return f"{self.name}{email}{role}"
+
 
 class UserField(ZendeskModel):
     """Zendesk User Field model."""

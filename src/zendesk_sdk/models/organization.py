@@ -26,6 +26,10 @@ class Organization(ZendeskModel):
     shared_comments: Optional[bool] = Field(None, description="End users can comment on each other's tickets")
     organization_fields: Optional[Dict[str, Any]] = Field(None, description="Custom organization field values")
 
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        return f"{self.name} (id={self.id})"
+
 
 class OrganizationField(ZendeskModel):
     """Zendesk Organization Field model."""

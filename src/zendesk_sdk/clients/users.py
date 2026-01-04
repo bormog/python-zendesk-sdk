@@ -28,8 +28,7 @@ class UsersClient(BaseClient):
             # Find user by email
             user = await client.users.by_email("user@example.com")
 
-            # Search users
-            users = await client.users.search("role:admin")
+            # For search use client.search.users()
     """
 
     def __init__(
@@ -92,21 +91,6 @@ class UsersClient(BaseClient):
         if users:
             return User(**users[0])
         return None
-
-    async def search(self, query: str, per_page: int = 100) -> List[User]:
-        """Search for users.
-
-        Args:
-            query: Search query string
-            per_page: Number of results per page (max 100)
-
-        Returns:
-            List of User objects
-        """
-        full_query = f"type:user {query}"
-        response = await self._get("search.json", params={"query": full_query, "per_page": per_page})
-        results = response.get("results", [])
-        return [User(**result) for result in results if result.get("result_type") == "user"]
 
     async def get_many(self, user_ids: List[int]) -> Dict[int, User]:
         """Fetch multiple users by IDs.

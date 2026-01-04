@@ -27,7 +27,6 @@ class ZendeskClient:
         async with ZendeskClient(config) as client:
             # Users
             user = await client.users.get(12345)
-            users = await client.users.search("role:admin")
 
             # Tickets
             ticket = await client.tickets.get(67890)
@@ -37,8 +36,9 @@ class ZendeskClient:
             # Organizations
             org = await client.organizations.get(111)
 
-            # Search
-            results = await client.search.tickets("status:open")
+            # Search (with pagination and limit)
+            async for ticket in client.search.tickets("status:open", limit=10):
+                print(ticket.subject)
 
             # Attachments
             content = await client.attachments.download(url)
@@ -80,7 +80,7 @@ class ZendeskClient:
             user = await client.users.get(12345)
             paginator = await client.users.list()
             user = await client.users.by_email("user@example.com")
-            users = await client.users.search("role:admin")
+            # For search use client.search.users()
         """
         from .clients import UsersClient
 
@@ -93,7 +93,7 @@ class ZendeskClient:
         Example:
             org = await client.organizations.get(12345)
             paginator = await client.organizations.list()
-            orgs = await client.organizations.search("acme")
+            # For search use client.search.organizations()
         """
         from .clients import OrganizationsClient
 
@@ -109,7 +109,6 @@ class ZendeskClient:
             paginator = await client.tickets.list()
             tickets = await client.tickets.for_user(67890)
             tickets = await client.tickets.for_organization(111)
-            tickets = await client.tickets.search("status:open")
 
             # Comments (nested)
             comments = await client.tickets.comments.list(12345)
@@ -122,9 +121,11 @@ class ZendeskClient:
             await client.tickets.tags.set(12345, ["new"])
             await client.tickets.tags.remove(12345, ["old"])
 
-            # Enriched tickets
+            # Enriched tickets (with comments + users)
             enriched = await client.tickets.get_enriched(12345)
             enriched = await client.tickets.search_enriched("status:open")
+
+            # For search use client.search.tickets()
         """
         from .clients import TicketsClient
 

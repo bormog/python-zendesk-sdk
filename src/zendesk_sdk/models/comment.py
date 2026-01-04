@@ -60,3 +60,9 @@ class Comment(ZendeskModel):
     # Additional fields that may appear in some contexts
     ticket_id: Optional[int] = Field(None, description="The ID of the ticket this comment belongs to")
     event_type: Optional[str] = Field(None, description="Event type when comment appears in audit/export context")
+
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        visibility = "public" if self.public else "private"
+        body = (self.plain_body or self.body or "")[:100]
+        return f"[{visibility}] {body}"

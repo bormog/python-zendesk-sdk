@@ -2,9 +2,10 @@
 
 import asyncio
 from functools import cached_property
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 
 from ..models import Comment, EnrichedTicket, Ticket, User
+from ..models.search import SearchQueryConfig, SearchType
 from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
@@ -282,20 +283,15 @@ class TicketsClient(BaseClient):
         response = await self._get(f"organizations/{org_id}/tickets.json", params={"per_page": per_page})
         return [Ticket(**ticket_data) for ticket_data in response.get("tickets", [])]
 
-    async def search(self, query: str, per_page: int = 100) -> List[Ticket]:
-        """Search for tickets.
-
-        Args:
-            query: Search query string
-            per_page: Number of results per page (max 100)
-
-        Returns:
-            List of Ticket objects
-        """
-        full_query = f"type:ticket {query}"
-        response = await self._get("search.json", params={"query": full_query, "per_page": per_page})
-        results = response.get("results", [])
-        return [Ticket(**result) for result in results if result.get("result_type") == "ticket"]
+    def _resolve_query(self, query: Union[str, SearchQueryConfig]) -> str:
+        """Convert query input to Zendesk query string."""
+        if isinstance(query, SearchQueryConfig):
+            # Force ticket type and get query string
+            if query.type != SearchType.TICKET:
+                query = query.model_copy(update={"type": SearchType.TICKET})
+            return query.to_query()
+        else:
+            return f"type:ticket {query}"
 
     # ==================== Enriched Ticket Methods ====================
 
@@ -398,29 +394,70 @@ class TicketsClient(BaseClient):
         ticket_users = self._extract_users_from_response(response)
         return await self._build_enriched_ticket(ticket, ticket_users)
 
-    async def search_enriched(self, query: str, per_page: int = 100) -> List[EnrichedTicket]:
-        """Search for tickets and load all related data.
+    async def search_enriched(
+        self,
+        query: Union[str, SearchQueryConfig],
+        per_page: int = 100,
+        limit: Optional[int] = None,
+    ) -> AsyncIterator[EnrichedTicket]:
+        """Search for tickets and load all related data with automatic pagination.
 
         Args:
-            query: Search query string
+            query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
+            limit: Maximum number of results to return (None = no limit)
 
-        Returns:
-            List of EnrichedTicket objects
+        Yields:
+            EnrichedTicket objects
+
+        Example:
+            # Iterate through enriched tickets
+            async for item in client.tickets.search_enriched(config, limit=10):
+                print(f"Ticket: {item.ticket.subject}")
+                print(f"Requester: {item.requester.name}")
+                print(f"Comments: {len(item.comments)}")
+
+            # Collect to list
+            enriched = [e async for e in client.tickets.search_enriched(config)]
         """
-        full_query = f"type:ticket {query}"
-        response = await self._get("search.json", params={"query": full_query, "per_page": per_page})
+        full_query = self._resolve_query(query)
+        paginator = ZendeskPaginator.create_search_paginator(
+            self._http, query=full_query, per_page=per_page
+        )
 
-        results = response.get("results", [])
-        tickets = [Ticket(**r) for r in results if r.get("result_type") == "ticket"]
+        count = 0
+        async for page_data in self._paginate_enriched(paginator):
+            # page_data is a batch of raw ticket dicts
+            tickets = [Ticket(**r) for r in page_data if r.get("result_type") == "ticket"]
 
-        if not tickets:
-            return []
+            if not tickets:
+                continue
 
-        user_ids = self._collect_user_ids_from_tickets(tickets)
-        ticket_users = await self._fetch_users_batch(user_ids)
+            # Enrich the batch
+            user_ids = self._collect_user_ids_from_tickets(tickets)
+            ticket_users = await self._fetch_users_batch(user_ids)
+            enriched_batch = await self._build_enriched_tickets(tickets, ticket_users)
 
-        return await self._build_enriched_tickets(tickets, ticket_users)
+            for enriched in enriched_batch:
+                yield enriched
+                count += 1
+                if limit and count >= limit:
+                    return
+
+    async def _paginate_enriched(
+        self, paginator: "Paginator[Dict[str, Any]]"
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Yield pages of raw ticket data for batch enrichment."""
+        while True:
+            try:
+                items = await paginator.get_page()
+                if items:
+                    yield items
+                if not paginator._has_more_pages():
+                    break
+                paginator._advance_to_next_page()
+            except Exception:
+                break
 
     async def for_organization_enriched(self, org_id: int, per_page: int = 100) -> List[EnrichedTicket]:
         """Get tickets for an organization with all related data.

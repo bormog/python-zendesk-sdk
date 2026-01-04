@@ -83,30 +83,6 @@ class TestUsersClient:
 
             assert result is None
 
-    @pytest.mark.asyncio
-    async def test_search(self):
-        """Test search users."""
-        client = self.get_client()
-        search_data = {
-            "results": [
-                {
-                    "id": 123,
-                    "name": "Admin User",
-                    "email": "admin@example.com",
-                    "result_type": "user",
-                    "created_at": "2023-01-01T00:00:00Z",
-                }
-            ]
-        }
-
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
-
-            result = await client.search("role:admin")
-
-            assert len(result) == 1
-            assert isinstance(result[0], User)
-            mock_get.assert_called_once_with("search.json", params={"query": "type:user role:admin", "per_page": 100})
 
     @pytest.mark.asyncio
     async def test_get_many(self):
@@ -167,30 +143,6 @@ class TestOrganizationsClient:
             assert result.id == 456
             assert result.name == "Test Org"
             mock_get.assert_called_once_with("organizations/456.json")
-
-    @pytest.mark.asyncio
-    async def test_search(self):
-        """Test search organizations."""
-        client = self.get_client()
-        search_data = {
-            "results": [
-                {
-                    "id": 456,
-                    "name": "ACME Corp",
-                    "result_type": "organization",
-                    "created_at": "2023-01-01T00:00:00Z",
-                }
-            ]
-        }
-
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
-
-            result = await client.search("ACME")
-
-            assert len(result) == 1
-            assert isinstance(result[0], Organization)
-            assert result[0].name == "ACME Corp"
 
 
 class TestTicketsClient:
@@ -260,30 +212,6 @@ class TestTicketsClient:
 
             assert len(result) == 1
             mock_get.assert_called_once_with("organizations/456/tickets.json", params={"per_page": 100})
-
-    @pytest.mark.asyncio
-    async def test_search(self):
-        """Test search tickets."""
-        client = self.get_client()
-        search_data = {
-            "results": [
-                {
-                    "id": 789,
-                    "subject": "Urgent Ticket",
-                    "status": "open",
-                    "result_type": "ticket",
-                    "created_at": "2023-01-01T00:00:00Z",
-                }
-            ]
-        }
-
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
-
-            result = await client.search("priority:high")
-
-            assert len(result) == 1
-            assert isinstance(result[0], Ticket)
 
     def test_comments_accessor(self):
         """Test comments accessor returns CommentsClient."""
@@ -492,7 +420,7 @@ class TestSearchClient:
 
     @pytest.mark.asyncio
     async def test_tickets(self):
-        """Test search tickets."""
+        """Test search tickets returns async iterator."""
         client = self.get_client()
         search_data = {
             "results": [
@@ -503,20 +431,21 @@ class TestSearchClient:
                     "result_type": "ticket",
                     "created_at": "2023-01-01T00:00:00Z",
                 }
-            ]
+            ],
+            "count": 1,
         }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
+        # Mock the HTTP client's get method (used by paginator)
+        client._http.get = AsyncMock(return_value=search_data)
 
-            result = await client.tickets("status:open")
+        result = [ticket async for ticket in client.tickets("status:open")]
 
-            assert len(result) == 1
-            assert isinstance(result[0], Ticket)
+        assert len(result) == 1
+        assert isinstance(result[0], Ticket)
 
     @pytest.mark.asyncio
     async def test_users(self):
-        """Test search users."""
+        """Test search users returns async iterator."""
         client = self.get_client()
         search_data = {
             "results": [
@@ -527,34 +456,34 @@ class TestSearchClient:
                     "result_type": "user",
                     "created_at": "2023-01-01T00:00:00Z",
                 }
-            ]
+            ],
+            "count": 1,
         }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
+        client._http.get = AsyncMock(return_value=search_data)
 
-            result = await client.users("role:admin")
+        result = [user async for user in client.users("role:admin")]
 
-            assert len(result) == 1
-            assert isinstance(result[0], User)
+        assert len(result) == 1
+        assert isinstance(result[0], User)
 
     @pytest.mark.asyncio
     async def test_organizations(self):
-        """Test search organizations."""
+        """Test search organizations returns async iterator."""
         client = self.get_client()
         search_data = {
             "results": [
                 {"id": 456, "name": "ACME", "result_type": "organization", "created_at": "2023-01-01T00:00:00Z"}
-            ]
+            ],
+            "count": 1,
         }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = search_data
+        client._http.get = AsyncMock(return_value=search_data)
 
-            result = await client.organizations("ACME")
+        result = [org async for org in client.organizations("ACME")]
 
-            assert len(result) == 1
-            assert isinstance(result[0], Organization)
+        assert len(result) == 1
+        assert isinstance(result[0], Organization)
 
 
 class TestAttachmentsClient:

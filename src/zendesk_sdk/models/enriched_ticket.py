@@ -55,3 +55,9 @@ class EnrichedTicket(ZendeskModel):
             User object if found, None otherwise
         """
         return self.get_user(comment.author_id)
+
+    def __str__(self) -> str:
+        """Human-readable string representation."""
+        requester = self.requester.name if self.requester else "Unknown"
+        assignee = self.assignee.name if self.assignee else "Unassigned"
+        return f"{self.ticket} | by {requester} → {assignee} | {len(self.comments)} comments"
