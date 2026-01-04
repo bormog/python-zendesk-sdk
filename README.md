@@ -1,6 +1,12 @@
 # Python Zendesk SDK
 
+[![PyPI](https://img.shields.io/pypi/v/python-zendesk-sdk)](https://pypi.org/project/python-zendesk-sdk/)
+[![Python](https://img.shields.io/pypi/pyversions/python-zendesk-sdk)](https://pypi.org/project/python-zendesk-sdk/)
 [![PyPI Downloads](https://static.pepy.tech/personalized-badge/python-zendesk-sdk?period=total&units=INTERNATIONAL_SYSTEM&left_color=BLACK&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/python-zendesk-sdk)
+[![License](https://img.shields.io/github/license/bormog/python-zendesk-sdk)](https://github.com/bormog/python-zendesk-sdk/blob/main/LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-blue)](https://docs.pydantic.dev/)
+[![Async](https://img.shields.io/badge/async-first-blueviolet)](https://docs.python.org/3/library/asyncio.html)
 
 Modern Python SDK for Zendesk API, designed for automation and AI agents.
 
