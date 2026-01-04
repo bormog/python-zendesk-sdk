@@ -129,6 +129,20 @@ class Ticket(ZendeskModel):
         priority = self.priority or "-"
         return f"#{self.id} | {status} | {priority} | {subject}"
 
+    def get_custom_field_value(self, field_id: int) -> Optional[Any]:
+        """Get custom field value by field ID.
+
+        Args:
+            field_id: The ID of the custom field
+
+        Returns:
+            The custom field value, or None if not found
+        """
+        for cf in self.custom_fields or []:
+            if cf.id == field_id:
+                return cf.value
+        return None
+
 
 class TicketField(ZendeskModel):
     """Zendesk Ticket Field model."""
