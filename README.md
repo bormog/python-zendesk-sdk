@@ -24,10 +24,9 @@ Zendesk has a powerful REST API, but using it directly is painful:
 - **LLM agents** — Claude Code, Codex, custom AI assistants that need structured Zendesk access
 - **Internal tools** — dashboards, reports, bulk operations
 
-### Built for AI Agents
+### Developer Experience
 
-When an LLM agent needs to work with Zendesk, it needs:
-- **Predictable structure** — typed models instead of arbitrary dicts
+- **Predictable structure** — typed Pydantic models instead of arbitrary dicts
 - **Complete context in one call** — `get_enriched()` returns ticket + all comments + all users
 - **Minimal API calls** — built-in caching reduces redundant requests
 - **Clear namespaces** — `client.tickets.comments.add()` is self-documenting
