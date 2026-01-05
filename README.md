@@ -1,12 +1,15 @@
-# Python Zendesk SDK
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:03363d,100:0f6a71&height=200&section=header&text=python-zendesk-sdk&fontSize=50&fontColor=ffffff&fontAlignY=35&desc=Modern%20async%20SDK%20for%20Zendesk%20API&descSize=18&descAlignY=55&animation=fadeIn">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f6a71,100:03363d&height=200&section=header&text=python-zendesk-sdk&fontSize=50&fontColor=ffffff&fontAlignY=35&desc=Modern%20async%20SDK%20for%20Zendesk%20API&descSize=18&descAlignY=55&animation=fadeIn" width="100%"/>
+</picture>
 
-[![PyPI](https://img.shields.io/pypi/v/python-zendesk-sdk)](https://pypi.org/project/python-zendesk-sdk/)
-[![Python](https://img.shields.io/pypi/pyversions/python-zendesk-sdk)](https://pypi.org/project/python-zendesk-sdk/)
-[![PyPI Downloads](https://static.pepy.tech/personalized-badge/python-zendesk-sdk?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/python-zendesk-sdk)
-[![License](https://img.shields.io/github/license/bormog/python-zendesk-sdk)](https://github.com/bormog/python-zendesk-sdk/blob/main/LICENSE)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
-[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-blue)](https://docs.pydantic.dev/)
-[![Async](https://img.shields.io/badge/async-first-blueviolet)](https://docs.python.org/3/library/asyncio.html)
+[![PyPI](https://img.shields.io/pypi/v/python-zendesk-sdk?color=0f6a71&logo=pypi&logoColor=white)](https://pypi.org/project/python-zendesk-sdk/)
+[![Python](https://img.shields.io/pypi/pyversions/python-zendesk-sdk?color=03363d&logo=python&logoColor=white)](https://pypi.org/project/python-zendesk-sdk/)
+[![Downloads](https://img.shields.io/pepy/dt/python-zendesk-sdk?color=0f6a71&logo=downloads&logoColor=white)](https://pepy.tech/projects/python-zendesk-sdk)
+[![License](https://img.shields.io/github/license/bormog/python-zendesk-sdk?color=03363d&logo=opensourceinitiative&logoColor=white)](https://github.com/bormog/python-zendesk-sdk/blob/main/LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000?logo=python&logoColor=white)](https://github.com/psf/black)
+[![Pydantic v2](https://img.shields.io/badge/Pydantic-v2-0f6a71?logo=pydantic&logoColor=white)](https://docs.pydantic.dev/)
+[![Async](https://img.shields.io/badge/async-first-03363d?logo=python&logoColor=white)](https://docs.python.org/3/library/asyncio.html)
 
 Modern Python SDK for Zendesk API, designed for automation and AI agents.
 
