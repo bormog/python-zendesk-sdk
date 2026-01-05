@@ -54,8 +54,7 @@ class AttachmentsClient:
             Raw bytes of the attachment content
 
         Example:
-            comments = await client.tickets.comments.list(12345)
-            for comment in comments:
+            async for comment in client.tickets.comments.list(12345):
                 for attachment in comment.attachments or []:
                     content = await client.attachments.download(attachment.content_url)
                     with open(attachment.file_name, "wb") as f:

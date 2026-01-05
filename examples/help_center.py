@@ -26,34 +26,31 @@ async def main() -> None:
 
         # ==================== Reading Content ====================
 
-        # List categories with pagination
+        # List categories with pagination (no await for list())
         print("--- Categories ---")
-        categories_paginator = await hc.categories.list(per_page=10)
-        categories = await categories_paginator.get_page()
+        categories = await hc.categories.list(per_page=10).get_page()
         for cat in categories[:5]:
-            print(f"Category: {cat['name']} (ID: {cat['id']})")
+            print(f"Category: {cat.name} (ID: {cat.id})")
 
         # Get specific category
         if categories:
-            category = await hc.categories.get(categories[0]["id"])
+            category = await hc.categories.get(categories[0].id)
             print(f"\nCategory details: {category.name}")
             print(f"Description: {category.description}")
 
         # List sections (all or by category)
         print("\n--- Sections ---")
-        sections_paginator = await hc.sections.list(per_page=10)
-        sections = await sections_paginator.get_page()
+        sections = await hc.sections.list(per_page=10).get_page()
         for sec in sections[:5]:
-            print(f"Section: {sec['name']} (Category: {sec['category_id']})")
+            print(f"Section: {sec.name} (Category: {sec.category_id})")
 
         # List articles in a section
         if sections:
-            section_id = sections[0]["id"]
-            articles_paginator = await hc.articles.for_section(section_id, per_page=10)
-            articles = await articles_paginator.get_page()
+            section_id = sections[0].id
+            articles = await hc.articles.for_section(section_id, per_page=10).get_page()
             print(f"\nArticles in section {section_id}:")
             for art in articles[:5]:
-                print(f"  - {art['title']}")
+                print(f"  - {art.title}")
 
         # ==================== Search ====================
 
@@ -84,11 +81,11 @@ async def main() -> None:
         print(f"Created section: {new_section.name} (ID: {new_section.id})")
 
         # Get permission_group_id from an existing article (required for creation)
-        existing_articles = await (await hc.articles.list(per_page=1)).get_page()
+        existing_articles = await hc.articles.list(per_page=1).get_page()
         if not existing_articles:
             print("No existing articles to get permission_group_id from")
             return
-        existing = await hc.articles.get(existing_articles[0]["id"])
+        existing = await hc.articles.get(existing_articles[0].id)
         permission_group_id = existing.permission_group_id
 
         # Create an article in the section
@@ -129,19 +126,24 @@ async def main() -> None:
         await hc.categories.delete(new_category.id, force=True)
         print("Deleted category (cascade deleted section and article)")
 
-        # ==================== Pagination ====================
+        # ==================== Pagination Examples ====================
 
-        # Iterate through all articles with async for
-        print("\n--- Pagination Example ---")
-        all_articles_paginator = await hc.articles.list(per_page=10)
+        print("\n--- Pagination Examples ---")
+
+        # Iterate through all articles
         count = 0
-        async for article_data in all_articles_paginator:
+        async for article in hc.articles.list(per_page=10):
             count += 1
             if count <= 3:
-                print(f"Article {count}: {article_data['title'][:40]}...")
+                title = article.title[:40] if article.title else "Untitled"
+                print(f"Article {count}: {title}...")
             if count >= 10:
                 print(f"... and more (stopped at {count})")
                 break
+
+        # Collect articles to list
+        all_articles = await hc.articles.list(limit=50).collect()
+        print(f"Collected {len(all_articles)} articles")
 
 
 if __name__ == "__main__":

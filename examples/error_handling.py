@@ -69,7 +69,7 @@ async def main() -> None:
 
         # Example: Handling specific HTTP status codes
         try:
-            ticket = await client.tickets.get(123)
+            _ = await client.tickets.get(123)
         except ZendeskHTTPException as e:
             if e.status_code == 404:
                 print("Ticket not found")
@@ -92,8 +92,9 @@ async def retry_with_backoff() -> None:
         max_attempts = 5
         for attempt in range(max_attempts):
             try:
-                result = await client.search.tickets("status:open")
-                print(f"Found {len(result)} tickets")
+                # Search returns paginator - iterate to get results
+                tickets = await client.search.tickets("status:open", limit=10).collect()
+                print(f"Found {len(tickets)} tickets")
                 break
             except ZendeskRateLimitException as e:
                 if attempt < max_attempts - 1:

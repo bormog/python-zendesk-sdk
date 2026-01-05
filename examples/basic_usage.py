@@ -3,6 +3,7 @@
 This example demonstrates:
 - Configuration setup
 - Basic API operations (get users, tickets, organizations)
+- Pagination basics
 - Search functionality
 """
 
@@ -41,23 +42,23 @@ async def main() -> None:
         ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject} (status: {ticket.status})")
 
-        # Get ticket comments
-        comments = await client.tickets.comments.list(12345)
-        print(f"Ticket has {len(comments)} comments")
+        # Get ticket comments (returns paginator)
+        comments = await client.tickets.comments.list(12345, limit=10).collect()
+        print(f"Ticket has {len(comments)} comments (limited to 10)")
 
         # Get organization
         org = await client.organizations.get(123)
         print(f"Organization: {org.name}")
 
-        # Search for tickets (returns async iterator)
+        # Search for tickets (paginator with async iteration)
         count = 0
         async for ticket in client.search.tickets("status:open", limit=10):
             count += 1
             print(f"  Open ticket: {ticket.subject}")
         print(f"Found {count} open tickets (limited to 10)")
 
-        # Search for users (returns async iterator)
-        admins = [u async for u in client.search.users("role:admin", limit=5)]
+        # Collect search results to list
+        admins = await client.search.users("role:admin", limit=5).collect()
         print(f"Found {len(admins)} admin users (limited to 5)")
 
 

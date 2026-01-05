@@ -205,14 +205,17 @@ class TicketsClient(BaseClient):
             # Get a ticket
             ticket = await client.tickets.get(12345)
 
-            # List all tickets
-            paginator = await client.tickets.list()
+            # List all tickets (returns paginator)
+            async for ticket in client.tickets.list():
+                print(ticket.subject)
 
             # Get tickets for a user
-            tickets = await client.tickets.for_user(67890)
+            async for ticket in client.tickets.for_user(67890):
+                print(ticket.subject)
 
             # Access nested resources
-            comments = await client.tickets.comments.list(12345)
+            async for comment in client.tickets.comments.list(12345):
+                print(comment.body)
             tags = await client.tickets.tags.get(12345)
 
             # Get enriched ticket with all data
@@ -422,8 +425,9 @@ class TicketsClient(BaseClient):
                 print(f"Requester: {item.requester.name}")
                 print(f"Comments: {len(item.comments)}")
 
-            # Collect to list
-            enriched = [e async for e in client.tickets.search_enriched(config)]
+            # Collect to list using paginator
+            paginator = client.tickets.search_enriched(config)
+            enriched = [e async for e in paginator]
         """
         full_query = self._resolve_query(query)
         paginator = ZendeskPaginator.create_search_tickets_paginator(
@@ -458,4 +462,3 @@ class TicketsClient(BaseClient):
         enriched_list = await self._build_enriched_tickets(tickets, ticket_users)
         for enriched in enriched_list:
             yield enriched
-

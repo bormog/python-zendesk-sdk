@@ -85,9 +85,9 @@ async def demo_disabled_cache() -> None:
         print(f"Cache enabled: {config.cache.enabled}")
 
         # Both calls hit the API
-        user1 = await client.users.get(12345)
-        user2 = await client.users.get(12345)
-        print(f"Both calls hit API - no caching")
+        _ = await client.users.get(12345)
+        _ = await client.users.get(12345)
+        print("Both calls hit API - no caching")
 
         # cache_info not available when caching is disabled
         has_cache_info = hasattr(client.users.get, "cache_info")

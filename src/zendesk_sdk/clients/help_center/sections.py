@@ -20,11 +20,19 @@ class SectionsClient(HelpCenterBaseClient):
             # Get a section
             section = await client.help_center.sections.get(12345)
 
-            # List all sections
-            paginator = await client.help_center.sections.list()
+            # List all sections (returns paginator)
+            async for section in client.help_center.sections.list():
+                print(section.name)
 
-            # List sections in a category
-            paginator = await client.help_center.sections.for_category(67890)
+            # Collect all sections with limit
+            sections = await client.help_center.sections.list(limit=30).collect()
+
+            # Get first page
+            first_page = await client.help_center.sections.list().get_page()
+
+            # List sections in a category (returns paginator)
+            async for section in client.help_center.sections.for_category(67890):
+                print(section.name)
 
             # Create a section
             section = await client.help_center.sections.create(

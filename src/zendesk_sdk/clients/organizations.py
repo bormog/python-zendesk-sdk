@@ -21,9 +21,14 @@ class OrganizationsClient(BaseClient):
             org = await client.organizations.get(12345)
 
             # List all organizations with pagination
-            paginator = await client.organizations.list()
-            async for org_data in paginator:
-                print(org_data["name"])
+            async for org in client.organizations.list():
+                print(org.name)
+
+            # Get specific page
+            orgs = await client.organizations.list().get_page(2)
+
+            # Collect all organizations to list
+            orgs = await client.organizations.list(limit=50).collect()
 
             # For search use client.search.organizations()
     """

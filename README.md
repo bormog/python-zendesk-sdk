@@ -84,18 +84,15 @@ async def main():
     )
 
     async with ZendeskClient(config) as client:
-        # Get users with pagination
-        paginator = await client.users.list(per_page=10)
-        users = await paginator.get_page()
-
-        for user in users:
-            print(f"User: {user['name']} ({user['email']})")
+        # Get a single user
+        user = await client.users.get(12345)
+        print(f"User: {user.name} ({user.email})")
 
         # Get specific ticket
         ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject}")
 
-        # Search tickets (async iterator with auto-pagination)
+        # Search tickets with pagination
         async for ticket in client.search.tickets("status:open priority:high", limit=10):
             print(f"High priority: {ticket.subject}")
 
@@ -126,31 +123,48 @@ config = ZendeskConfig()  # Will load from environment
 
 ## API Methods
 
+### Pagination
+
+All list methods return **Paginator** objects. Three ways to work with them:
+
+```python
+# 1. Get specific page
+paginator = client.users.list(per_page=20)
+users = await paginator.get_page(2)  # Get page 2
+
+# 2. Iterate through all items
+async for user in client.users.list():
+    print(user.name)
+
+# 3. Collect to list
+users = await client.users.list(limit=50).collect()
+```
+
 ### Users
 ```python
 user = await client.users.get(user_id)           # Get user by ID
-paginator = await client.users.list()            # List users with pagination
 user = await client.users.by_email(email)        # Get user by email
 users = await client.users.get_many([id1, id2])  # Get multiple users
+paginator = client.users.list()                  # List users (paginator)
 ```
 
 ### Organizations
 ```python
 org = await client.organizations.get(org_id)     # Get organization by ID
-paginator = await client.organizations.list()    # List organizations
+paginator = client.organizations.list()          # List organizations (paginator)
 ```
 
 ### Tickets
 ```python
 ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
-paginator = await client.tickets.list()                # List tickets
-tickets = await client.tickets.for_user(user_id)       # Get user's tickets
-tickets = await client.tickets.for_organization(org_id) # Get org's tickets
+paginator = client.tickets.list()                      # List tickets (paginator)
+paginator = client.tickets.for_user(user_id)           # User's tickets (paginator)
+paginator = client.tickets.for_organization(org_id)    # Org's tickets (paginator)
 ```
 
 ### Comments (nested under tickets)
 ```python
-comments = await client.tickets.comments.list(ticket_id)
+paginator = client.tickets.comments.list(ticket_id)    # List comments (paginator)
 ticket = await client.tickets.comments.add(ticket_id, body, public=False)
 await client.tickets.comments.make_private(ticket_id, comment_id)
 comment = await client.tickets.comments.redact(ticket_id, comment_id, text)
@@ -205,14 +219,14 @@ await client.tickets.comments.add(ticket_id, "See attached", uploads=[token])
 
 ### Search
 
-All search methods return **async iterators** with automatic pagination.
+All search methods return **Paginator** objects with the same interface as list methods.
 
 #### Raw Queries (Zendesk syntax)
 
 Use the same query syntax as in Zendesk UI — it just works:
 
 ```python
-# Tickets
+# Tickets - iterate through results
 async for ticket in client.search.tickets("status:open priority:high"):
     print(ticket.subject)
 
@@ -224,8 +238,8 @@ async for user in client.search.users("role:admin"):
 async for org in client.search.organizations("tags:enterprise"):
     print(org.name)
 
-# Collect to list
-all_tickets = [t async for t in client.search.tickets("status:pending", limit=100)]
+# Collect to list with limit
+tickets = await client.search.tickets("status:pending", limit=100).collect()
 
 # Search with enrichment (loads comments + users)
 async for item in client.tickets.search_enriched("status:open", limit=10):
@@ -325,7 +339,7 @@ Access Help Center (Guide) via `client.help_center` namespace:
 #### Categories
 ```python
 cat = await client.help_center.categories.get(category_id)
-paginator = await client.help_center.categories.list()
+paginator = client.help_center.categories.list()              # Paginator
 cat = await client.help_center.categories.create(name, description)
 cat = await client.help_center.categories.update(category_id, name=new_name)
 await client.help_center.categories.delete(category_id, force=True)
@@ -334,8 +348,8 @@ await client.help_center.categories.delete(category_id, force=True)
 #### Sections
 ```python
 sec = await client.help_center.sections.get(section_id)
-paginator = await client.help_center.sections.list()
-paginator = await client.help_center.sections.for_category(category_id)
+paginator = client.help_center.sections.list()                # Paginator
+paginator = client.help_center.sections.for_category(category_id)
 sec = await client.help_center.sections.create(category_id, name, description)
 sec = await client.help_center.sections.update(section_id, name=new_name)
 await client.help_center.sections.delete(section_id, force=True)
@@ -344,9 +358,9 @@ await client.help_center.sections.delete(section_id, force=True)
 #### Articles
 ```python
 art = await client.help_center.articles.get(article_id)
-paginator = await client.help_center.articles.list()
-paginator = await client.help_center.articles.for_section(section_id)
-paginator = await client.help_center.articles.for_category(category_id)
+paginator = client.help_center.articles.list()                # Paginator
+paginator = client.help_center.articles.for_section(section_id)
+paginator = client.help_center.articles.for_category(category_id)
 results = await client.help_center.articles.search(query)
 art = await client.help_center.articles.create(section_id, title, body=html)
 art = await client.help_center.articles.update(article_id, title=new_title)
@@ -359,8 +373,8 @@ async with ZendeskClient(config) as client:
     hc = client.help_center
 
     # Get permission_group_id from existing article (required for article creation)
-    existing = await (await hc.articles.list(per_page=1)).get_page()
-    article_details = await hc.articles.get(existing[0]["id"])
+    existing = await hc.articles.list(per_page=1).get_page()
+    article_details = await hc.articles.get(existing[0].id)
     permission_group_id = article_details.permission_group_id
 
     # Create category -> section -> article hierarchy

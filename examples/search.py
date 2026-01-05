@@ -5,6 +5,7 @@ This example demonstrates:
 - Searching tickets, users, and organizations
 - Combining search with enrichment
 - Using date filters and tags
+- Working with paginators
 """
 
 import asyncio
@@ -34,8 +35,8 @@ async def search_tickets_basic() -> None:
             priority=["high", "urgent"],
         )
 
-        # Collect first 5 tickets
-        tickets = [t async for t in client.search.tickets(query, limit=5)]
+        # Collect first 5 tickets using paginator
+        tickets = await client.search.tickets(query, limit=5).collect()
         print(f"Found {len(tickets)} high-priority open/pending tickets")
 
         for ticket in tickets:
@@ -65,7 +66,7 @@ async def search_tickets_with_filters() -> None:
         )
 
         print(f"Query: {query.to_query()}")
-        tickets = [t async for t in client.search.tickets(query, limit=10)]
+        tickets = await client.search.tickets(query, limit=10).collect()
         print(f"Found {len(tickets)} tickets")
 
 
@@ -124,7 +125,7 @@ async def search_users() -> None:
             is_verified=True,
         )
 
-        users = [u async for u in client.search.users(query, limit=5)]
+        users = await client.search.users(query, limit=5).collect()
         print(f"Found {len(users)} verified agents/admins")
 
         for user in users:
@@ -147,7 +148,7 @@ async def search_organizations() -> None:
             tags=["enterprise", "premium"],
         )
 
-        orgs = [o async for o in client.search.organizations(query, limit=5)]
+        orgs = await client.search.organizations(query, limit=5).collect()
         print(f"Found {len(orgs)} enterprise/premium organizations")
 
         for org in orgs:
@@ -176,7 +177,7 @@ async def search_with_custom_fields() -> None:
         )
 
         print(f"Query: {query.to_query()}")
-        tickets = [t async for t in client.search.tickets(query, limit=10)]
+        tickets = await client.search.tickets(query, limit=10).collect()
         print(f"Found {len(tickets)} tickets")
 
 
@@ -191,13 +192,46 @@ async def backward_compatible_search() -> None:
     )
 
     async with ZendeskClient(config) as client:
-        # Raw query strings still work - returns async iterator
-        tickets = [t async for t in client.search.tickets("status:open priority:high", limit=10)]
+        # Raw query strings still work - returns paginator
+        tickets = await client.search.tickets("status:open priority:high", limit=10).collect()
         print(f"Found {len(tickets)} tickets with raw query")
 
-        # Enriched search also returns async iterator
+        # Enriched search returns async iterator
         enriched = [e async for e in client.tickets.search_enriched("status:open", limit=10)]
         print(f"Found {len(enriched)} enriched tickets with raw query")
+
+
+async def pagination_examples() -> None:
+    """Demonstrate pagination with search."""
+    print("\n=== Search Pagination Examples ===")
+
+    config = ZendeskConfig(
+        subdomain="your-subdomain",
+        email="your-email@example.com",
+        token="your-api-token",
+    )
+
+    async with ZendeskClient(config) as client:
+        # Get paginator for search
+        paginator = client.search.tickets("status:open", per_page=20)
+
+        # Get first page
+        first_page = await paginator.get_page()
+        print(f"First page: {len(first_page)} tickets")
+
+        # Get specific page
+        second_page = await paginator.get_page(page=2)
+        print(f"Second page: {len(second_page)} tickets")
+
+        # Iterate through all results
+        count = 0
+        async for ticket in client.search.tickets("priority:high", limit=50):
+            count += 1
+        print(f"Iterated through {count} high-priority tickets")
+
+        # Collect to list with limit
+        urgent = await client.search.tickets("priority:urgent", limit=20).collect()
+        print(f"Collected {len(urgent)} urgent tickets")
 
 
 async def main() -> None:
@@ -209,6 +243,7 @@ async def main() -> None:
     await search_organizations()
     await search_with_custom_fields()
     await backward_compatible_search()
+    await pagination_examples()
 
 
 if __name__ == "__main__":

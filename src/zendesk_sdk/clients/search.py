@@ -15,6 +15,7 @@ class SearchClient(BaseClient):
     """Client for Zendesk Search API.
 
     Supports both raw query strings and typed SearchQueryConfig.
+    All search methods return paginators for iterating through results.
 
     Example:
         async with ZendeskClient(config) as client:
@@ -26,13 +27,17 @@ class SearchClient(BaseClient):
                 priority=["high"],
                 organization_id=12345,
             )
-            tickets = await client.search.tickets(config)
+            # Returns paginator - no await needed
+            async for ticket in client.search.tickets(config):
+                print(ticket.subject)
 
             # Raw query string (backward compatible)
-            tickets = await client.search.tickets("status:open priority:high")
+            async for ticket in client.search.tickets("status:open priority:high"):
+                print(ticket.subject)
 
-            # Unified search method
-            results = await client.search(config)
+            # Unified search method with limit
+            async for result in client.search.all(config, limit=10):
+                print(result)
     """
 
     def _resolve_query(
@@ -68,13 +73,19 @@ class SearchClient(BaseClient):
     ) -> "Paginator[Dict[str, Any]]":
         """Search across all Zendesk resources with pagination.
 
+        Returns a paginator object that can be iterated asynchronously.
+
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            Paginator for iterating through search results
+            Paginator[Dict[str, Any]] for iterating through search results
+
+        Example:
+            async for result in client.search.all(config, limit=10):
+                print(result)
         """
         query_str = self._resolve_query(query)
         return ZendeskPaginator.create_search_paginator(self._http, query=query_str, per_page=per_page, limit=limit)
@@ -87,13 +98,15 @@ class SearchClient(BaseClient):
     ) -> "OffsetPaginator[Ticket]":
         """Search for tickets with pagination.
 
+        Returns a paginator object that can be iterated asynchronously.
+
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            Paginator for iterating through ticket results
+            OffsetPaginator[Ticket] for iterating through ticket results
 
         Example:
             # Iterate through tickets
@@ -103,6 +116,9 @@ class SearchClient(BaseClient):
             # Get specific page
             paginator = client.search.tickets(config)
             page = await paginator.get_page(2)
+
+            # Collect all results to list
+            tickets = await paginator.collect()
         """
         query_str = self._resolve_query(query, force_type=SearchType.TICKET)
         return ZendeskPaginator.create_search_tickets_paginator(
@@ -117,13 +133,15 @@ class SearchClient(BaseClient):
     ) -> "OffsetPaginator[User]":
         """Search for users with pagination.
 
+        Returns a paginator object that can be iterated asynchronously.
+
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            Paginator for iterating through user results
+            OffsetPaginator[User] for iterating through user results
 
         Example:
             # Iterate through users
@@ -133,6 +151,9 @@ class SearchClient(BaseClient):
             # Get specific page
             paginator = client.search.users(config)
             page = await paginator.get_page(2)
+
+            # Collect all results to list
+            users = await paginator.collect()
         """
         query_str = self._resolve_query(query, force_type=SearchType.USER)
         return ZendeskPaginator.create_search_users_paginator(
@@ -147,13 +168,15 @@ class SearchClient(BaseClient):
     ) -> "OffsetPaginator[Organization]":
         """Search for organizations with pagination.
 
+        Returns a paginator object that can be iterated asynchronously.
+
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            Paginator for iterating through organization results
+            OffsetPaginator[Organization] for iterating through organization results
 
         Example:
             # Iterate through organizations
@@ -163,6 +186,9 @@ class SearchClient(BaseClient):
             # Get specific page
             paginator = client.search.organizations(config)
             page = await paginator.get_page(2)
+
+            # Collect all results to list
+            orgs = await paginator.collect()
         """
         query_str = self._resolve_query(query, force_type=SearchType.ORGANIZATION)
         return ZendeskPaginator.create_search_organizations_paginator(
@@ -190,11 +216,16 @@ class SearchClient(BaseClient):
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            CursorPaginator for iterating through ticket results
+            CursorPaginator[Ticket] for iterating through ticket results
 
         Example:
+            # Iterate through all tickets
             async for ticket in client.search.export_tickets("status:open"):
-                print(ticket)
+                print(ticket.subject)
+
+            # Collect all results to list
+            paginator = client.search.export_tickets()
+            tickets = await paginator.collect()
         """
         query_str = self._resolve_query(query) or "*"
         return ZendeskPaginator.create_export_tickets_paginator(
@@ -220,7 +251,11 @@ class SearchClient(BaseClient):
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            CursorPaginator for iterating through user results
+            CursorPaginator[User] for iterating through user results
+
+        Example:
+            async for user in client.search.export_users():
+                print(user.name)
         """
         query_str = self._resolve_query(query) or "*"
         return ZendeskPaginator.create_export_users_paginator(
@@ -246,7 +281,11 @@ class SearchClient(BaseClient):
             limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            CursorPaginator for iterating through organization results
+            CursorPaginator[Organization] for iterating through organization results
+
+        Example:
+            async for org in client.search.export_organizations():
+                print(org.name)
         """
         query_str = self._resolve_query(query) or "*"
         return ZendeskPaginator.create_export_organizations_paginator(

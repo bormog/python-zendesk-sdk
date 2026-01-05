@@ -20,8 +20,15 @@ class CategoriesClient(HelpCenterBaseClient):
             # Get a category
             category = await client.help_center.categories.get(12345)
 
-            # List all categories
-            paginator = await client.help_center.categories.list()
+            # List all categories (returns paginator)
+            async for category in client.help_center.categories.list():
+                print(category.name)
+
+            # Collect all categories with limit
+            categories = await client.help_center.categories.list(limit=20).collect()
+
+            # Get first page
+            first_page = await client.help_center.categories.list().get_page()
 
             # Create a category
             category = await client.help_center.categories.create(

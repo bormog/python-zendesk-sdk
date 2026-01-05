@@ -20,8 +20,23 @@ class ArticlesClient(HelpCenterBaseClient):
             # Get an article
             article = await client.help_center.articles.get(12345)
 
-            # List all articles
-            paginator = await client.help_center.articles.list()
+            # List all articles (returns paginator)
+            async for article in client.help_center.articles.list():
+                print(article.title)
+
+            # Collect all articles with limit
+            articles = await client.help_center.articles.list(limit=50).collect()
+
+            # Get first page
+            first_page = await client.help_center.articles.list().get_page()
+
+            # List articles in a section
+            async for article in client.help_center.articles.for_section(section_id):
+                print(article.title)
+
+            # List articles in a category
+            async for article in client.help_center.articles.for_category(category_id):
+                print(article.title)
 
             # Search articles
             results = await client.help_center.articles.search("password reset")

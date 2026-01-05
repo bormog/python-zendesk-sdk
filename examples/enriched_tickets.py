@@ -19,6 +19,8 @@ async def main() -> None:
     )
 
     async with ZendeskClient(config) as client:
+        # ==================== Single enriched ticket ====================
+
         # Get a single ticket with all related data
         # This makes 2 API calls: ticket + comments (with sideloaded users)
         enriched = await client.tickets.get_enriched(12345)
@@ -48,6 +50,8 @@ async def main() -> None:
             else:
                 print(f"  - Unknown: {body_preview}")
 
+        # ==================== Search with enrichment ====================
+
         # Search for tickets and load all related data
         # This efficiently batch-loads users using show_many endpoint
         print("\n--- Searching tickets with enriched data ---")
@@ -57,25 +61,15 @@ async def main() -> None:
             print(f"  Assignee: {item.assignee.name if item.assignee else 'Unassigned'}")
             print(f"  Comments: {len(item.comments)}")
 
-        # Get organization tickets with all related data
-        print("\n--- Organization tickets ---")
-        org_tickets = await client.tickets.for_organization_enriched(
-            org_id=123,
-            per_page=10,
-        )
+        # ==================== Collect enriched tickets ====================
 
-        for item in org_tickets:
-            print(f"Ticket #{item.ticket.id}: {item.ticket.subject}")
+        # You can also collect enriched tickets to a list
+        print("\n--- Collecting enriched tickets ---")
+        enriched_tickets = [item async for item in client.tickets.search_enriched("status:pending", limit=5)]
+        print(f"Collected {len(enriched_tickets)} enriched tickets")
 
-        # Get user's tickets with all related data
-        print("\n--- User tickets ---")
-        user_tickets = await client.tickets.for_user_enriched(
-            user_id=456,
-            per_page=10,
-        )
-
-        for item in user_tickets:
-            print(f"Ticket #{item.ticket.id}: {item.ticket.subject}")
+        for item in enriched_tickets:
+            print(f"  #{item.ticket.id}: {item.ticket.subject}")
 
 
 if __name__ == "__main__":

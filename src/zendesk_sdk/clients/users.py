@@ -21,9 +21,14 @@ class UsersClient(BaseClient):
             user = await client.users.get(12345)
 
             # List all users with pagination
-            paginator = await client.users.list()
-            async for user_data in paginator:
-                print(user_data["name"])
+            async for user in client.users.list():
+                print(user.name)
+
+            # Get specific page
+            users = await client.users.list().get_page(2)
+
+            # Collect all users to list
+            users = await client.users.list(limit=50).collect()
 
             # Find user by email
             user = await client.users.by_email("user@example.com")
