@@ -64,28 +64,32 @@ class SectionsClient(HelpCenterBaseClient):
         response = await self._get(f"sections/{section_id}.json")
         return Section(**response["section"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Section]":
         """Get paginated list of all Help Center sections.
 
         Args:
             per_page: Number of sections per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all sections
         """
-        return ZendeskPaginator.create_sections_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_sections_paginator(self._http, per_page=per_page, limit=limit)
 
-    async def for_category(self, category_id: int, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def for_category(self, category_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Section]":
         """Get paginated list of sections in a specific category.
 
         Args:
             category_id: The category's ID
             per_page: Number of sections per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through category's sections
         """
-        return ZendeskPaginator.create_sections_paginator(self._http, per_page=per_page, category_id=category_id)
+        return ZendeskPaginator.create_sections_paginator(
+            self._http, per_page=per_page, category_id=category_id, limit=limit
+        )
 
     async def create(
         self,

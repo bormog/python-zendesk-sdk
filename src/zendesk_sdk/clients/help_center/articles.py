@@ -62,30 +62,34 @@ class ArticlesClient(HelpCenterBaseClient):
         response = await self._get(f"articles/{article_id}.json")
         return Article(**response["article"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Article]":
         """Get paginated list of all Help Center articles.
 
         Args:
             per_page: Number of articles per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all articles
         """
-        return ZendeskPaginator.create_articles_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_articles_paginator(self._http, per_page=per_page, limit=limit)
 
-    async def for_section(self, section_id: int, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def for_section(self, section_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Article]":
         """Get paginated list of articles in a specific section.
 
         Args:
             section_id: The section's ID
             per_page: Number of articles per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through section's articles
         """
-        return ZendeskPaginator.create_articles_paginator(self._http, per_page=per_page, section_id=section_id)
+        return ZendeskPaginator.create_articles_paginator(
+            self._http, per_page=per_page, section_id=section_id, limit=limit
+        )
 
-    async def for_category(self, category_id: int, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def for_category(self, category_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Article]":
         """Get paginated list of articles in a specific category.
 
         This returns all articles across all sections in the category.
@@ -93,11 +97,14 @@ class ArticlesClient(HelpCenterBaseClient):
         Args:
             category_id: The category's ID
             per_page: Number of articles per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through category's articles
         """
-        return ZendeskPaginator.create_articles_paginator(self._http, per_page=per_page, category_id=category_id)
+        return ZendeskPaginator.create_articles_paginator(
+            self._http, per_page=per_page, category_id=category_id, limit=limit
+        )
 
     async def search(
         self,

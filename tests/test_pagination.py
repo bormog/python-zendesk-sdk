@@ -409,6 +409,8 @@ class TestZendeskPaginator:
 
     def test_create_users_paginator(self):
         """Test creating users paginator."""
+        from zendesk_sdk.models import User
+
         http_client = Mock()
         paginator = ZendeskPaginator.create_users_paginator(http_client, per_page=50)
 
@@ -416,13 +418,20 @@ class TestZendeskPaginator:
         assert paginator.path == "users.json"
         assert paginator.per_page == 50
 
-        # Test users-specific item extraction
+        # Test users-specific item extraction - now returns User models
         response = {"users": [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}]}
         items = paginator._extract_items(response)
-        assert items == [{"id": 1, "name": "User 1"}, {"id": 2, "name": "User 2"}]
+        assert len(items) == 2
+        assert all(isinstance(item, User) for item in items)
+        assert items[0].id == 1
+        assert items[0].name == "User 1"
+        assert items[1].id == 2
+        assert items[1].name == "User 2"
 
     def test_create_tickets_paginator(self):
         """Test creating tickets paginator."""
+        from zendesk_sdk.models import Ticket
+
         http_client = Mock()
         paginator = ZendeskPaginator.create_tickets_paginator(http_client, per_page=25)
 
@@ -430,13 +439,18 @@ class TestZendeskPaginator:
         assert paginator.path == "tickets.json"
         assert paginator.per_page == 25
 
-        # Test tickets-specific item extraction
+        # Test tickets-specific item extraction - now returns Ticket models
         response = {"tickets": [{"id": 1, "subject": "Test Ticket"}]}
         items = paginator._extract_items(response)
-        assert items == [{"id": 1, "subject": "Test Ticket"}]
+        assert len(items) == 1
+        assert isinstance(items[0], Ticket)
+        assert items[0].id == 1
+        assert items[0].subject == "Test Ticket"
 
     def test_create_organizations_paginator(self):
         """Test creating organizations paginator."""
+        from zendesk_sdk.models import Organization
+
         http_client = Mock()
         paginator = ZendeskPaginator.create_organizations_paginator(http_client, per_page=75)
 
@@ -444,10 +458,13 @@ class TestZendeskPaginator:
         assert paginator.path == "organizations.json"
         assert paginator.per_page == 75
 
-        # Test organizations-specific item extraction
+        # Test organizations-specific item extraction - now returns Organization models
         response = {"organizations": [{"id": 1, "name": "Test Org"}]}
         items = paginator._extract_items(response)
-        assert items == [{"id": 1, "name": "Test Org"}]
+        assert len(items) == 1
+        assert isinstance(items[0], Organization)
+        assert items[0].id == 1
+        assert items[0].name == "Test Org"
 
     def test_create_search_paginator(self):
         """Test creating search paginator."""

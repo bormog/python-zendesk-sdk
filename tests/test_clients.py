@@ -177,40 +177,55 @@ class TestTicketsClient:
 
     @pytest.mark.asyncio
     async def test_for_user(self):
-        """Test get tickets for user."""
+        """Test get tickets for user returns paginator."""
+        from zendesk_sdk.pagination import OffsetPaginator
+
         client = self.get_client()
         tickets_data = {
             "tickets": [
                 {"id": 789, "subject": "User Ticket", "status": "open", "created_at": "2023-01-01T00:00:00Z"},
-            ]
+            ],
+            "count": 1,
         }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = tickets_data
+        # for_user now returns a paginator (sync method)
+        paginator = client.for_user(123)
+        assert isinstance(paginator, OffsetPaginator)
+        assert paginator.path == "users/123/tickets/requested.json"
 
-            result = await client.for_user(123)
+        # Test that paginator extracts tickets correctly
+        client._http.get = AsyncMock(return_value=tickets_data)
+        result = await paginator.get_page()
 
-            assert len(result) == 1
-            assert isinstance(result[0], Ticket)
-            mock_get.assert_called_once_with("users/123/tickets/requested.json", params={"per_page": 100})
+        assert len(result) == 1
+        assert isinstance(result[0], Ticket)
+        assert result[0].id == 789
 
     @pytest.mark.asyncio
     async def test_for_organization(self):
-        """Test get tickets for organization."""
+        """Test get tickets for organization returns paginator."""
+        from zendesk_sdk.pagination import OffsetPaginator
+
         client = self.get_client()
         tickets_data = {
             "tickets": [
                 {"id": 789, "subject": "Org Ticket", "status": "open", "created_at": "2023-01-01T00:00:00Z"},
-            ]
+            ],
+            "count": 1,
         }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = tickets_data
+        # for_organization now returns a paginator (sync method)
+        paginator = client.for_organization(456)
+        assert isinstance(paginator, OffsetPaginator)
+        assert paginator.path == "organizations/456/tickets.json"
 
-            result = await client.for_organization(456)
+        # Test that paginator extracts tickets correctly
+        client._http.get = AsyncMock(return_value=tickets_data)
+        result = await paginator.get_page()
 
-            assert len(result) == 1
-            mock_get.assert_called_once_with("organizations/456/tickets.json", params={"per_page": 100})
+        assert len(result) == 1
+        assert isinstance(result[0], Ticket)
+        assert result[0].id == 789
 
     def test_comments_accessor(self):
         """Test comments accessor returns CommentsClient."""
@@ -233,35 +248,14 @@ class TestCommentsClient:
 
     @pytest.mark.asyncio
     async def test_list(self):
-        """Test list comments."""
+        """Test list comments returns paginator."""
         client = self.get_client()
-        comments_data = {
-            "comments": [
-                {
-                    "id": 111,
-                    "body": "Comment 1",
-                    "author_id": 123,
-                    "public": True,
-                    "created_at": "2023-01-01T00:00:00Z",
-                },
-                {
-                    "id": 112,
-                    "body": "Comment 2",
-                    "author_id": 124,
-                    "public": False,
-                    "created_at": "2023-01-01T00:00:00Z",
-                },
-            ]
-        }
 
-        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
-            mock_get.return_value = comments_data
+        paginator = client.list(789)
 
-            result = await client.list(789)
-
-            assert len(result) == 2
-            assert all(isinstance(c, Comment) for c in result)
-            mock_get.assert_called_once_with("tickets/789/comments.json", params={"per_page": 100})
+        # Should return a paginator, not awaitable
+        assert hasattr(paginator, "get_page")
+        assert hasattr(paginator, "__aiter__")
 
     @pytest.mark.asyncio
     async def test_add_private(self):

@@ -1,6 +1,6 @@
 """Users API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional
 
 from ..models import User
 from ..pagination import ZendeskPaginator
@@ -64,16 +64,17 @@ class UsersClient(BaseClient):
         response = await self._get(f"users/{user_id}.json")
         return User(**response["user"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[User]":
         """Get paginated list of users.
 
         Args:
             per_page: Number of users per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all users
         """
-        return ZendeskPaginator.create_users_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_users_paginator(self._http, per_page=per_page, limit=limit)
 
     async def _by_email_impl(self, email: str) -> Optional[User]:
         """Get a user by email address.

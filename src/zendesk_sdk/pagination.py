@@ -5,6 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar
 
 from .exceptions import ZendeskPaginationException
+from .models import Article, Category, Comment, Organization, Section, Ticket, User
 
 logger = logging.getLogger(__name__)
 
@@ -33,13 +34,18 @@ class PaginationInfo:
     @classmethod
     def from_response(cls, response: Dict[str, Any]) -> "PaginationInfo":
         """Create pagination info from API response."""
+        next_page = response.get("next_page")
+        # Zendesk doesn't return has_more directly, but we can infer it from next_page
+        has_more = response.get("has_more")
+        if has_more is None and next_page is not None:
+            has_more = True
         return cls(
             page=response.get("page"),
             per_page=response.get("per_page"),
             count=response.get("count"),
-            next_page=response.get("next_page"),
+            next_page=next_page,
             previous_page=response.get("previous_page"),
-            has_more=response.get("has_more"),
+            has_more=has_more,
         )
 
     def __repr__(self) -> str:
@@ -52,12 +58,18 @@ class Paginator(ABC, Generic[T]):
     """Abstract base class for paginators."""
 
     def __init__(
-        self, http_client: Any, path: str, params: Optional[Dict[str, Any]] = None, per_page: int = 100
+        self,
+        http_client: Any,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        per_page: int = 100,
+        limit: Optional[int] = None,
     ) -> None:
         self.http_client = http_client
         self.path = path
         self.params = params or {}
         self.per_page = per_page
+        self.limit = limit if limit else None  # 0 or None means no limit
         self._current_page = 1
         self._pagination_info: Optional[PaginationInfo] = None
 
@@ -108,12 +120,16 @@ class Paginator(ABC, Generic[T]):
         from .exceptions import ZendeskHTTPException
 
         self._current_page = 1
+        count = 0
 
         while True:
             try:
                 items = await self.get_page()
                 for item in items:
                     yield item
+                    count += 1
+                    if self.limit and count >= self.limit:
+                        return
 
                 # Check if there are more pages
                 if not self._has_more_pages():
@@ -133,6 +149,18 @@ class Paginator(ABC, Generic[T]):
                 raise ZendeskPaginationException(
                     f"Error during pagination: {str(e)}", {"page": self._current_page, "per_page": self.per_page}
                 )
+
+    async def collect(self) -> List[T]:
+        """Collect all items into a list.
+
+        Returns:
+            List of all items across all pages (respects limit if set)
+
+        Example:
+            comments = await client.tickets.comments.list(ticket_id).collect()
+            tickets = await client.search.tickets(query, limit=50).collect()
+        """
+        return [item async for item in self]
 
     @abstractmethod
     def _has_more_pages(self) -> bool:
@@ -161,6 +189,11 @@ class OffsetPaginator(Paginator[T]):
     def _update_pagination_state(self, response: Dict[str, Any]) -> bool:
         """Update pagination state from response."""
         self._pagination_info = PaginationInfo.from_response(response)
+        # Zendesk doesn't return page/per_page - fill from our internal state
+        if self._pagination_info.page is None:
+            self._pagination_info.page = self._current_page
+        if self._pagination_info.per_page is None:
+            self._pagination_info.per_page = self.per_page
         return self._has_more_pages()
 
     def _get_page_params(self) -> Dict[str, Any]:
@@ -192,9 +225,14 @@ class CursorPaginator(Paginator[T]):
     """Cursor-based paginator for large datasets."""
 
     def __init__(
-        self, http_client: Any, path: str, params: Optional[Dict[str, Any]] = None, per_page: int = 100
+        self,
+        http_client: Any,
+        path: str,
+        params: Optional[Dict[str, Any]] = None,
+        per_page: int = 100,
+        limit: Optional[int] = None,
     ) -> None:
-        super().__init__(http_client, path, params, per_page)
+        super().__init__(http_client, path, params, per_page, limit)
         self._next_cursor: Optional[str] = None
         self._has_started = False
 
@@ -259,8 +297,10 @@ class SearchExportPaginator(CursorPaginator[Dict[str, Any]]):
     - Cursor expires after 1 hour
     """
 
-    def __init__(self, http_client: Any, query: str, filter_type: str, page_size: int = 100) -> None:
-        super().__init__(http_client, "search/export.json", per_page=page_size)
+    def __init__(
+        self, http_client: Any, query: str, filter_type: str, page_size: int = 100, limit: Optional[int] = None
+    ) -> None:
+        super().__init__(http_client, "search/export.json", per_page=page_size, limit=limit)
         self.query = query
         self.filter_type = filter_type
         self._next_url: Optional[str] = None
@@ -314,65 +354,194 @@ class ZendeskPaginator:
     """Factory for creating Zendesk-specific paginators."""
 
     @staticmethod
-    def create_users_paginator(http_client: Any, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
+    def create_users_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[User]:
         """Create paginator for users endpoint."""
 
-        class UsersPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("users", [])
+        class UsersPaginator(OffsetPaginator[User]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[User]:
+                return [User(**u) for u in response.get("users", [])]
 
-        return UsersPaginator(http_client, "users.json", per_page=per_page)
+        return UsersPaginator(http_client, "users.json", per_page=per_page, limit=limit)
 
     @staticmethod
-    def create_tickets_paginator(http_client: Any, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
+    def create_tickets_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Ticket]:
         """Create paginator for tickets endpoint."""
 
-        class TicketsPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("tickets", [])
+        class TicketsPaginator(OffsetPaginator[Ticket]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**t) for t in response.get("tickets", [])]
 
-        return TicketsPaginator(http_client, "tickets.json", per_page=per_page)
+        return TicketsPaginator(http_client, "tickets.json", per_page=per_page, limit=limit)
 
     @staticmethod
-    def create_organizations_paginator(http_client: Any, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
+    def create_user_tickets_paginator(
+        http_client: Any, user_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Ticket]:
+        """Create paginator for user's requested tickets endpoint."""
+
+        class UserTicketsPaginator(OffsetPaginator[Ticket]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**t) for t in response.get("tickets", [])]
+
+        return UserTicketsPaginator(
+            http_client, f"users/{user_id}/tickets/requested.json", per_page=per_page, limit=limit
+        )
+
+    @staticmethod
+    def create_organization_tickets_paginator(
+        http_client: Any, organization_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Ticket]:
+        """Create paginator for organization's tickets endpoint."""
+
+        class OrganizationTicketsPaginator(OffsetPaginator[Ticket]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**t) for t in response.get("tickets", [])]
+
+        return OrganizationTicketsPaginator(
+            http_client, f"organizations/{organization_id}/tickets.json", per_page=per_page, limit=limit
+        )
+
+    @staticmethod
+    def create_ticket_comments_paginator(
+        http_client: Any, ticket_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Comment]:
+        """Create paginator for ticket comments endpoint."""
+
+        class TicketCommentsPaginator(OffsetPaginator[Comment]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Comment]:
+                return [Comment(**c) for c in response.get("comments", [])]
+
+        return TicketCommentsPaginator(
+            http_client, f"tickets/{ticket_id}/comments.json", per_page=per_page, limit=limit
+        )
+
+    @staticmethod
+    def create_organizations_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Organization]:
         """Create paginator for organizations endpoint."""
 
-        class OrganizationsPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("organizations", [])
+        class OrganizationsPaginator(OffsetPaginator[Organization]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Organization]:
+                return [Organization(**o) for o in response.get("organizations", [])]
 
-        return OrganizationsPaginator(http_client, "organizations.json", per_page=per_page)
+        return OrganizationsPaginator(http_client, "organizations.json", per_page=per_page, limit=limit)
 
     @staticmethod
-    def create_search_paginator(http_client: Any, query: str, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
-        """Create paginator for search endpoint."""
+    def create_search_paginator(
+        http_client: Any, query: str, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Dict[str, Any]]:
+        """Create paginator for search endpoint (raw results)."""
 
         class SearchPaginator(OffsetPaginator[Dict[str, Any]]):
             def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
                 return response.get("results", [])
 
-        return SearchPaginator(http_client, "search.json", params={"query": query}, per_page=per_page)
+        return SearchPaginator(http_client, "search.json", params={"query": query}, per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_search_tickets_paginator(
+        http_client: Any, query: str, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Ticket]:
+        """Create paginator for ticket search. Query should include type:ticket."""
+
+        class SearchTicketsPaginator(OffsetPaginator[Ticket]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**r) for r in response.get("results", []) if r.get("result_type") == "ticket"]
+
+        return SearchTicketsPaginator(
+            http_client, "search.json", params={"query": query}, per_page=per_page, limit=limit
+        )
+
+    @staticmethod
+    def create_search_users_paginator(
+        http_client: Any, query: str, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[User]:
+        """Create paginator for user search. Query should include type:user."""
+
+        class SearchUsersPaginator(OffsetPaginator[User]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[User]:
+                return [User(**r) for r in response.get("results", []) if r.get("result_type") == "user"]
+
+        return SearchUsersPaginator(http_client, "search.json", params={"query": query}, per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_search_organizations_paginator(
+        http_client: Any, query: str, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Organization]:
+        """Create paginator for organization search. Query should include type:organization."""
+
+        class SearchOrganizationsPaginator(OffsetPaginator[Organization]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Organization]:
+                return [
+                    Organization(**r) for r in response.get("results", []) if r.get("result_type") == "organization"
+                ]
+
+        return SearchOrganizationsPaginator(
+            http_client, "search.json", params={"query": query}, per_page=per_page, limit=limit
+        )
 
     @staticmethod
     def create_search_export_paginator(
-        http_client: Any, query: str, filter_type: str, page_size: int = 100
+        http_client: Any, query: str, filter_type: str, page_size: int = 100, limit: Optional[int] = None
     ) -> "SearchExportPaginator":
-        """Create cursor-based paginator for search export endpoint.
+        """Create cursor-based paginator for search export endpoint (raw results).
 
         Args:
             http_client: HTTP client instance
             query: Search query string
             filter_type: Object type to filter (ticket, user, organization, group)
             page_size: Results per page (max 1000, recommended 100)
+            limit: Maximum number of items to return (None = no limit)
 
         Returns:
             SearchExportPaginator for cursor-based iteration
         """
-        return SearchExportPaginator(http_client, query, filter_type, page_size)
+        return SearchExportPaginator(http_client, query, filter_type, page_size, limit=limit)
+
+    @staticmethod
+    def create_export_tickets_paginator(
+        http_client: Any, query: str, page_size: int = 100, limit: Optional[int] = None
+    ) -> CursorPaginator[Ticket]:
+        """Create cursor-based paginator for ticket export."""
+
+        class ExportTicketsPaginator(SearchExportPaginator):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**r) for r in response.get("results", [])]
+
+        return ExportTicketsPaginator(http_client, query, "ticket", page_size, limit=limit)
+
+    @staticmethod
+    def create_export_users_paginator(
+        http_client: Any, query: str, page_size: int = 100, limit: Optional[int] = None
+    ) -> CursorPaginator[User]:
+        """Create cursor-based paginator for user export."""
+
+        class ExportUsersPaginator(SearchExportPaginator):
+            def _extract_items(self, response: Dict[str, Any]) -> List[User]:
+                return [User(**r) for r in response.get("results", [])]
+
+        return ExportUsersPaginator(http_client, query, "user", page_size, limit=limit)
+
+    @staticmethod
+    def create_export_organizations_paginator(
+        http_client: Any, query: str, page_size: int = 100, limit: Optional[int] = None
+    ) -> CursorPaginator[Organization]:
+        """Create cursor-based paginator for organization export."""
+
+        class ExportOrganizationsPaginator(SearchExportPaginator):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Organization]:
+                return [Organization(**r) for r in response.get("results", [])]
+
+        return ExportOrganizationsPaginator(http_client, query, "organization", page_size, limit=limit)
 
     @staticmethod
     def create_incremental_paginator(
-        http_client: Any, resource_type: str, start_time: int
+        http_client: Any, resource_type: str, start_time: int, limit: Optional[int] = None
     ) -> CursorPaginator[Dict[str, Any]]:
         """Create cursor-based paginator for incremental exports."""
 
@@ -382,46 +551,53 @@ class ZendeskPaginator:
 
         path = f"incremental/{resource_type}.json"
         params = {"start_time": start_time}
-        return IncrementalPaginator(http_client, path, params=params)
+        return IncrementalPaginator(http_client, path, params=params, limit=limit)
 
     # Help Center paginators
 
     @staticmethod
-    def create_categories_paginator(http_client: Any, per_page: int = 100) -> OffsetPaginator[Dict[str, Any]]:
+    def create_categories_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Category]:
         """Create paginator for Help Center categories endpoint."""
 
-        class CategoriesPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("categories", [])
+        class CategoriesPaginator(OffsetPaginator[Category]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Category]:
+                return [Category(**c) for c in response.get("categories", [])]
 
-        return CategoriesPaginator(http_client, "help_center/categories.json", per_page=per_page)
+        return CategoriesPaginator(http_client, "help_center/categories.json", per_page=per_page, limit=limit)
 
     @staticmethod
     def create_sections_paginator(
-        http_client: Any, per_page: int = 100, category_id: Optional[int] = None
-    ) -> OffsetPaginator[Dict[str, Any]]:
+        http_client: Any, per_page: int = 100, category_id: Optional[int] = None, limit: Optional[int] = None
+    ) -> OffsetPaginator[Section]:
         """Create paginator for Help Center sections endpoint.
 
         Args:
             http_client: HTTP client instance
             per_page: Number of items per page
             category_id: If provided, list sections only in this category
+            limit: Maximum number of items to return (None = no limit)
         """
 
-        class SectionsPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("sections", [])
+        class SectionsPaginator(OffsetPaginator[Section]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Section]:
+                return [Section(**s) for s in response.get("sections", [])]
 
         if category_id:
             path = f"help_center/categories/{category_id}/sections.json"
         else:
             path = "help_center/sections.json"
-        return SectionsPaginator(http_client, path, per_page=per_page)
+        return SectionsPaginator(http_client, path, per_page=per_page, limit=limit)
 
     @staticmethod
     def create_articles_paginator(
-        http_client: Any, per_page: int = 100, section_id: Optional[int] = None, category_id: Optional[int] = None
-    ) -> OffsetPaginator[Dict[str, Any]]:
+        http_client: Any,
+        per_page: int = 100,
+        section_id: Optional[int] = None,
+        category_id: Optional[int] = None,
+        limit: Optional[int] = None,
+    ) -> OffsetPaginator[Article]:
         """Create paginator for Help Center articles endpoint.
 
         Args:
@@ -429,11 +605,12 @@ class ZendeskPaginator:
             per_page: Number of items per page
             section_id: If provided, list articles only in this section
             category_id: If provided, list articles only in this category
+            limit: Maximum number of items to return (None = no limit)
         """
 
-        class ArticlesPaginator(OffsetPaginator[Dict[str, Any]]):
-            def _extract_items(self, response: Dict[str, Any]) -> List[Dict[str, Any]]:
-                return response.get("articles", [])
+        class ArticlesPaginator(OffsetPaginator[Article]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Article]:
+                return [Article(**a) for a in response.get("articles", [])]
 
         if section_id:
             path = f"help_center/sections/{section_id}/articles.json"
@@ -441,4 +618,4 @@ class ZendeskPaginator:
             path = f"help_center/categories/{category_id}/articles.json"
         else:
             path = "help_center/articles.json"
-        return ArticlesPaginator(http_client, path, per_page=per_page)
+        return ArticlesPaginator(http_client, path, per_page=per_page, limit=limit)

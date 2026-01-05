@@ -1,14 +1,14 @@
 """Search API client."""
 
-from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
+from typing import TYPE_CHECKING, Any, Dict, Optional, Union
 
 from ..models import Organization, Ticket, User
 from ..models.search import SearchQueryConfig, SearchType
-from ..pagination import SearchExportPaginator, ZendeskPaginator
+from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
 if TYPE_CHECKING:
-    from ..pagination import Paginator
+    from ..pagination import CursorPaginator, OffsetPaginator, Paginator
 
 
 class SearchClient(BaseClient):
@@ -60,167 +60,123 @@ class SearchClient(BaseClient):
                 return f"type:{force_type.value} {query}"
             return query
 
-    async def __call__(
+    def all(
         self,
         query: Union[str, SearchQueryConfig],
         per_page: int = 100,
-    ) -> Union[List[Ticket], List[User], List[Organization]]:
-        """Unified search method that returns typed results based on query type.
-
-        Args:
-            query: SearchQueryConfig or raw query string
-            per_page: Number of results per page (max 100)
-
-        Returns:
-            List of Ticket, User, or Organization objects based on query type
-        """
-        if isinstance(query, SearchQueryConfig):
-            search_type = query.type
-            query_str = query.to_query()
-        else:
-            # Try to detect type from raw query
-            query_str = query
-            if "type:user" in query.lower():
-                search_type = SearchType.USER
-            elif "type:organization" in query.lower():
-                search_type = SearchType.ORGANIZATION
-            else:
-                search_type = SearchType.TICKET
-                if "type:ticket" not in query.lower():
-                    query_str = f"type:ticket {query}"
-
-        response = await self._get("search.json", params={"query": query_str, "per_page": per_page})
-        results = response.get("results", [])
-
-        if search_type == SearchType.USER:
-            return [User(**r) for r in results if r.get("result_type") == "user"]
-        elif search_type == SearchType.ORGANIZATION:
-            return [Organization(**r) for r in results if r.get("result_type") == "organization"]
-        else:
-            return [Ticket(**r) for r in results if r.get("result_type") == "ticket"]
-
-    async def all(
-        self,
-        query: Union[str, SearchQueryConfig],
-        per_page: int = 100,
+        limit: Optional[int] = None,
     ) -> "Paginator[Dict[str, Any]]":
         """Search across all Zendesk resources with pagination.
 
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through search results
         """
         query_str = self._resolve_query(query)
-        return ZendeskPaginator.create_search_paginator(self._http, query=query_str, per_page=per_page)
+        return ZendeskPaginator.create_search_paginator(self._http, query=query_str, per_page=per_page, limit=limit)
 
-    async def tickets(
+    def tickets(
         self,
         query: Union[str, SearchQueryConfig],
         per_page: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[Ticket]:
-        """Search for tickets with automatic pagination.
+    ) -> "OffsetPaginator[Ticket]":
+        """Search for tickets with pagination.
 
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            Ticket objects
+        Returns:
+            Paginator for iterating through ticket results
 
         Example:
-            # Get first 10 tickets
+            # Iterate through tickets
             async for ticket in client.search.tickets(config, limit=10):
                 print(ticket.subject)
 
-            # Get all tickets (up to Zendesk's 1000 limit)
-            async for ticket in client.search.tickets(config):
-                print(ticket.subject)
+            # Get specific page
+            paginator = client.search.tickets(config)
+            page = await paginator.get_page(2)
         """
         query_str = self._resolve_query(query, force_type=SearchType.TICKET)
-        paginator = await self.all(query_str, per_page=per_page)
-        count = 0
-        async for item in paginator:
-            if item.get("result_type") == "ticket":
-                yield Ticket(**item)
-                count += 1
-                if limit and count >= limit:
-                    return
+        return ZendeskPaginator.create_search_tickets_paginator(
+            self._http, query=query_str, per_page=per_page, limit=limit
+        )
 
-    async def users(
+    def users(
         self,
         query: Union[str, SearchQueryConfig],
         per_page: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[User]:
-        """Search for users with automatic pagination.
+    ) -> "OffsetPaginator[User]":
+        """Search for users with pagination.
 
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            User objects
+        Returns:
+            Paginator for iterating through user results
 
         Example:
-            # Get first 10 users
+            # Iterate through users
             async for user in client.search.users(config, limit=10):
                 print(user.name)
+
+            # Get specific page
+            paginator = client.search.users(config)
+            page = await paginator.get_page(2)
         """
         query_str = self._resolve_query(query, force_type=SearchType.USER)
-        paginator = await self.all(query_str, per_page=per_page)
-        count = 0
-        async for item in paginator:
-            if item.get("result_type") == "user":
-                yield User(**item)
-                count += 1
-                if limit and count >= limit:
-                    return
+        return ZendeskPaginator.create_search_users_paginator(
+            self._http, query=query_str, per_page=per_page, limit=limit
+        )
 
-    async def organizations(
+    def organizations(
         self,
         query: Union[str, SearchQueryConfig],
         per_page: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[Organization]:
-        """Search for organizations with automatic pagination.
+    ) -> "OffsetPaginator[Organization]":
+        """Search for organizations with pagination.
 
         Args:
             query: SearchQueryConfig or raw query string
             per_page: Number of results per page (max 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            Organization objects
+        Returns:
+            Paginator for iterating through organization results
 
         Example:
-            # Get first 10 organizations
+            # Iterate through organizations
             async for org in client.search.organizations(config, limit=10):
                 print(org.name)
+
+            # Get specific page
+            paginator = client.search.organizations(config)
+            page = await paginator.get_page(2)
         """
         query_str = self._resolve_query(query, force_type=SearchType.ORGANIZATION)
-        paginator = await self.all(query_str, per_page=per_page)
-        count = 0
-        async for item in paginator:
-            if item.get("result_type") == "organization":
-                yield Organization(**item)
-                count += 1
-                if limit and count >= limit:
-                    return
+        return ZendeskPaginator.create_search_organizations_paginator(
+            self._http, query=query_str, per_page=per_page, limit=limit
+        )
 
     # Export methods (cursor-based pagination, no duplicates)
 
-    async def export_tickets(
+    def export_tickets(
         self,
         query: Union[str, SearchQueryConfig] = "",
         page_size: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[Ticket]:
+    ) -> "CursorPaginator[Ticket]":
         """Export tickets using cursor-based pagination.
 
         Uses /search/export endpoint which:
@@ -231,30 +187,26 @@ class SearchClient(BaseClient):
         Args:
             query: SearchQueryConfig or raw query string (empty = all tickets)
             page_size: Results per page (max 1000, recommended 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            Ticket objects
+        Returns:
+            CursorPaginator for iterating through ticket results
 
         Example:
             async for ticket in client.search.export_tickets("status:open"):
                 print(ticket)
         """
         query_str = self._resolve_query(query) or "*"
-        paginator = SearchExportPaginator(self._http, query_str, "ticket", page_size)
-        count = 0
-        async for item in paginator:
-            yield Ticket(**item)
-            count += 1
-            if limit and count >= limit:
-                return
+        return ZendeskPaginator.create_export_tickets_paginator(
+            self._http, query=query_str, page_size=page_size, limit=limit
+        )
 
-    async def export_users(
+    def export_users(
         self,
         query: Union[str, SearchQueryConfig] = "",
         page_size: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[User]:
+    ) -> "CursorPaginator[User]":
         """Export users using cursor-based pagination.
 
         Uses /search/export endpoint which:
@@ -265,26 +217,22 @@ class SearchClient(BaseClient):
         Args:
             query: SearchQueryConfig or raw query string
             page_size: Results per page (max 1000, recommended 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            User objects
+        Returns:
+            CursorPaginator for iterating through user results
         """
         query_str = self._resolve_query(query) or "*"
-        paginator = SearchExportPaginator(self._http, query_str, "user", page_size)
-        count = 0
-        async for item in paginator:
-            yield User(**item)
-            count += 1
-            if limit and count >= limit:
-                return
+        return ZendeskPaginator.create_export_users_paginator(
+            self._http, query=query_str, page_size=page_size, limit=limit
+        )
 
-    async def export_organizations(
+    def export_organizations(
         self,
         query: Union[str, SearchQueryConfig] = "",
         page_size: int = 100,
         limit: Optional[int] = None,
-    ) -> AsyncIterator[Organization]:
+    ) -> "CursorPaginator[Organization]":
         """Export organizations using cursor-based pagination.
 
         Uses /search/export endpoint which:
@@ -295,16 +243,12 @@ class SearchClient(BaseClient):
         Args:
             query: SearchQueryConfig or raw query string
             page_size: Results per page (max 1000, recommended 100)
-            limit: Maximum number of results to return (None = no limit)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
-        Yields:
-            Organization objects
+        Returns:
+            CursorPaginator for iterating through organization results
         """
         query_str = self._resolve_query(query) or "*"
-        paginator = SearchExportPaginator(self._http, query_str, "organization", page_size)
-        count = 0
-        async for item in paginator:
-            yield Organization(**item)
-            count += 1
-            if limit and count >= limit:
-                return
+        return ZendeskPaginator.create_export_organizations_paginator(
+            self._http, query=query_str, page_size=page_size, limit=limit
+        )

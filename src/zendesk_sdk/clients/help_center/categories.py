@@ -61,16 +61,17 @@ class CategoriesClient(HelpCenterBaseClient):
         response = await self._get(f"categories/{category_id}.json")
         return Category(**response["category"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Category]":
         """Get paginated list of Help Center categories.
 
         Args:
             per_page: Number of categories per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all categories
         """
-        return ZendeskPaginator.create_categories_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_categories_paginator(self._http, per_page=per_page, limit=limit)
 
     async def create(
         self,

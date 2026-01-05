@@ -11,7 +11,7 @@ from .base import BaseClient
 
 if TYPE_CHECKING:
     from ..http_client import HTTPClient
-    from ..pagination import Paginator
+    from ..pagination import OffsetPaginator, Paginator
 
 
 class CommentsClient(BaseClient):
@@ -19,8 +19,9 @@ class CommentsClient(BaseClient):
 
     Example:
         async with ZendeskClient(config) as client:
-            # List comments on a ticket
-            comments = await client.tickets.comments.list(12345)
+            # Iterate through comments
+            async for comment in client.tickets.comments.list(12345):
+                print(comment.body)
 
             # Add a private note
             await client.tickets.comments.add(12345, "Internal note")
@@ -29,18 +30,18 @@ class CommentsClient(BaseClient):
             await client.tickets.comments.add(12345, "Hello!", public=True)
     """
 
-    async def list(self, ticket_id: int, per_page: int = 100) -> List[Comment]:
-        """Get comments for a specific ticket.
+    def list(self, ticket_id: int, per_page: int = 100, limit: Optional[int] = None) -> "OffsetPaginator[Comment]":
+        """Get comments for a specific ticket with pagination.
 
         Args:
             ticket_id: The ticket's ID
             per_page: Number of comments per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            List of Comment objects
+            Paginator for iterating through comments
         """
-        response = await self._get(f"tickets/{ticket_id}/comments.json", params={"per_page": per_page})
-        return [Comment(**comment_data) for comment_data in response.get("comments", [])]
+        return ZendeskPaginator.create_ticket_comments_paginator(self._http, ticket_id, per_page=per_page, limit=limit)
 
     async def add(
         self,
@@ -246,42 +247,45 @@ class TicketsClient(BaseClient):
         response = await self._get(f"tickets/{ticket_id}.json")
         return Ticket(**response["ticket"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
         """Get paginated list of tickets.
 
         Args:
             per_page: Number of tickets per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all tickets
         """
-        return ZendeskPaginator.create_tickets_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_tickets_paginator(self._http, per_page=per_page, limit=limit)
 
-    async def for_user(self, user_id: int, per_page: int = 100) -> List[Ticket]:
-        """Get tickets requested by a specific user.
+    def for_user(self, user_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
+        """Get paginated tickets requested by a specific user.
 
         Args:
             user_id: The user's ID
             per_page: Number of tickets per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            List of Ticket objects
+            Paginator for iterating through user's tickets
         """
-        response = await self._get(f"users/{user_id}/tickets/requested.json", params={"per_page": per_page})
-        return [Ticket(**ticket_data) for ticket_data in response.get("tickets", [])]
+        return ZendeskPaginator.create_user_tickets_paginator(self._http, user_id, per_page=per_page, limit=limit)
 
-    async def for_organization(self, org_id: int, per_page: int = 100) -> List[Ticket]:
-        """Get tickets for a specific organization.
+    def for_organization(self, org_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
+        """Get paginated tickets for a specific organization.
 
         Args:
             org_id: The organization's ID
             per_page: Number of tickets per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
-            List of Ticket objects
+            Paginator for iterating through organization's tickets
         """
-        response = await self._get(f"organizations/{org_id}/tickets.json", params={"per_page": per_page})
-        return [Ticket(**ticket_data) for ticket_data in response.get("tickets", [])]
+        return ZendeskPaginator.create_organization_tickets_paginator(
+            self._http, org_id, per_page=per_page, limit=limit
+        )
 
     def _resolve_query(self, query: Union[str, SearchQueryConfig]) -> str:
         """Convert query input to Zendesk query string."""
@@ -397,14 +401,15 @@ class TicketsClient(BaseClient):
     async def search_enriched(
         self,
         query: Union[str, SearchQueryConfig],
-        per_page: int = 100,
         limit: Optional[int] = None,
     ) -> AsyncIterator[EnrichedTicket]:
         """Search for tickets and load all related data with automatic pagination.
 
+        Note: This method makes N+1 API calls per ticket (fetching comments).
+        Users are batched for efficiency.
+
         Args:
             query: SearchQueryConfig or raw query string
-            per_page: Number of results per page (max 100)
             limit: Maximum number of results to return (None = no limit)
 
         Yields:
@@ -421,74 +426,36 @@ class TicketsClient(BaseClient):
             enriched = [e async for e in client.tickets.search_enriched(config)]
         """
         full_query = self._resolve_query(query)
-        paginator = ZendeskPaginator.create_search_paginator(self._http, query=full_query, per_page=per_page)
+        paginator = ZendeskPaginator.create_search_tickets_paginator(
+            self._http, query=full_query, per_page=100, limit=limit
+        )
 
-        count = 0
-        async for page_data in self._paginate_enriched(paginator):
-            # page_data is a batch of raw ticket dicts
-            tickets = [Ticket(**r) for r in page_data if r.get("result_type") == "ticket"]
+        # Process in batches for efficient user fetching
+        batch: List[Ticket] = []
+        async for ticket in paginator:
+            batch.append(ticket)
 
-            if not tickets:
-                continue
+            if len(batch) >= 100:
+                async for enriched in self._enrich_ticket_batch(batch):
+                    yield enriched
+                batch = []
 
-            # Enrich the batch
-            user_ids = self._collect_user_ids_from_tickets(tickets)
-            ticket_users = await self._fetch_users_batch(user_ids)
-            enriched_batch = await self._build_enriched_tickets(tickets, ticket_users)
-
-            for enriched in enriched_batch:
+        # Process remaining
+        if batch:
+            async for enriched in self._enrich_ticket_batch(batch):
                 yield enriched
-                count += 1
-                if limit and count >= limit:
-                    return
 
-    async def _paginate_enriched(self, paginator: "Paginator[Dict[str, Any]]") -> AsyncIterator[List[Dict[str, Any]]]:
-        """Yield pages of raw ticket data for batch enrichment."""
-        while True:
-            try:
-                items = await paginator.get_page()
-                if items:
-                    yield items
-                if not paginator._has_more_pages():
-                    break
-                paginator._advance_to_next_page()
-            except Exception:
-                break
+    async def _enrich_ticket_batch(self, tickets: List[Ticket]) -> AsyncIterator[EnrichedTicket]:
+        """Enrich a batch of tickets with users and comments."""
+        if not tickets:
+            return
 
-    async def for_organization_enriched(self, org_id: int, per_page: int = 100) -> List[EnrichedTicket]:
-        """Get tickets for an organization with all related data.
+        # Batch fetch users for all tickets
+        user_ids = self._collect_user_ids_from_tickets(tickets)
+        ticket_users = await self._fetch_users_batch(user_ids)
 
-        Args:
-            org_id: The organization's ID
-            per_page: Number of tickets per page (max 100)
+        # Fetch comments and build enriched tickets
+        enriched_list = await self._build_enriched_tickets(tickets, ticket_users)
+        for enriched in enriched_list:
+            yield enriched
 
-        Returns:
-            List of EnrichedTicket objects
-        """
-        response = await self._get(
-            f"organizations/{org_id}/tickets.json", params={"per_page": per_page, "include": "users"}
-        )
-
-        tickets = [Ticket(**t) for t in response.get("tickets", [])]
-        ticket_users = self._extract_users_from_response(response)
-
-        return await self._build_enriched_tickets(tickets, ticket_users)
-
-    async def for_user_enriched(self, user_id: int, per_page: int = 100) -> List[EnrichedTicket]:
-        """Get tickets requested by a user with all related data.
-
-        Args:
-            user_id: The user's ID
-            per_page: Number of tickets per page (max 100)
-
-        Returns:
-            List of EnrichedTicket objects
-        """
-        response = await self._get(
-            f"users/{user_id}/tickets/requested.json", params={"per_page": per_page, "include": "users"}
-        )
-
-        tickets = [Ticket(**t) for t in response.get("tickets", [])]
-        ticket_users = self._extract_users_from_response(response)
-
-        return await self._build_enriched_tickets(tickets, ticket_users)

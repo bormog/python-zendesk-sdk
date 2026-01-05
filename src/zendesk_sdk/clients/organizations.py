@@ -1,6 +1,6 @@
 """Organizations API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from ..models import Organization
 from ..pagination import ZendeskPaginator
@@ -56,13 +56,14 @@ class OrganizationsClient(BaseClient):
         response = await self._get(f"organizations/{org_id}.json")
         return Organization(**response["organization"])
 
-    async def list(self, per_page: int = 100) -> "Paginator[Dict[str, Any]]":
+    def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Organization]":
         """Get paginated list of organizations.
 
         Args:
             per_page: Number of organizations per page (max 100)
+            limit: Maximum number of items to return when iterating (None = no limit)
 
         Returns:
             Paginator for iterating through all organizations
         """
-        return ZendeskPaginator.create_organizations_paginator(self._http, per_page=per_page)
+        return ZendeskPaginator.create_organizations_paginator(self._http, per_page=per_page, limit=limit)
