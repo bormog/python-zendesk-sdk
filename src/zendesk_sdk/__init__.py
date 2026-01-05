@@ -5,7 +5,7 @@ This package provides a clean, async-first interface to the Zendesk API
 with full type safety and comprehensive error handling.
 """
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 from .client import ZendeskClient
 from .clients import (
