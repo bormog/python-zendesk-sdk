@@ -1,7 +1,4 @@
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://capsule-render.vercel.app/api?type=waving&color=0:03363d,100:0f6a71&height=200&section=header&text=python-zendesk-sdk&fontSize=50&fontColor=ffffff&fontAlignY=35&desc=Modern%20async%20SDK%20for%20Zendesk%20API&descSize=18&descAlignY=55&animation=fadeIn">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f6a71,100:03363d&height=200&section=header&text=python-zendesk-sdk&fontSize=50&fontColor=ffffff&fontAlignY=35&desc=Modern%20async%20SDK%20for%20Zendesk%20API&descSize=18&descAlignY=55&animation=fadeIn" width="100%"/>
-</picture>
+![header](https://capsule-render.vercel.app/api?type=waving&color=0:03363d,100:0f6a71&height=200&section=header&text=python-zendesk-sdk&fontSize=50&fontColor=ffffff&fontAlignY=35&desc=Modern%20async%20SDK%20for%20Zendesk%20API&descSize=18&descAlignY=55&animation=fadeIn)
 
 [![PyPI](https://img.shields.io/pypi/v/python-zendesk-sdk?color=0f6a71&logo=pypi&logoColor=white)](https://pypi.org/project/python-zendesk-sdk/)
 [![Python](https://img.shields.io/pypi/pyversions/python-zendesk-sdk?color=03363d&logo=python&logoColor=white)](https://pypi.org/project/python-zendesk-sdk/)
