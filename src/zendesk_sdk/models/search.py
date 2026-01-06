@@ -26,6 +26,12 @@ class TicketStatus(str, Enum):
     CLOSED = "closed"
 
 
+# Literal type for string autocomplete in IDE
+TicketStatusLiteral = Literal["new", "open", "pending", "hold", "solved", "closed"]
+# Union type: accepts both Enum and string literals
+TicketStatusInput = Union[TicketStatus, TicketStatusLiteral]
+
+
 class TicketPriority(str, Enum):
     """Ticket priority values."""
 
@@ -35,6 +41,12 @@ class TicketPriority(str, Enum):
     URGENT = "urgent"
 
 
+# Literal type for string autocomplete in IDE
+TicketPriorityLiteral = Literal["low", "normal", "high", "urgent"]
+# Union type: accepts both Enum and string literals
+TicketPriorityInput = Union[TicketPriority, TicketPriorityLiteral]
+
+
 class TicketType(str, Enum):
     """Ticket type values."""
 
@@ -42,6 +54,12 @@ class TicketType(str, Enum):
     INCIDENT = "incident"
     PROBLEM = "problem"
     TASK = "task"
+
+
+# Literal type for string autocomplete in IDE
+TicketTypeLiteral = Literal["question", "incident", "problem", "task"]
+# Union type: accepts both Enum and string literals
+TicketTypeInput = Union[TicketType, TicketTypeLiteral]
 
 
 class TicketChannel(str, Enum):

@@ -39,8 +39,11 @@ from .models import (
     SortOrder,
     TicketChannel,
     TicketPriority,
+    TicketPriorityInput,
     TicketStatus,
+    TicketStatusInput,
     TicketType,
+    TicketTypeInput,
     UserRole,
 )
 
@@ -71,8 +74,11 @@ __all__ = [
     "SearchQueryConfig",
     "SearchType",
     "TicketStatus",
+    "TicketStatusInput",
     "TicketPriority",
+    "TicketPriorityInput",
     "TicketType",
+    "TicketTypeInput",
     "TicketChannel",
     "UserRole",
     "SortOrder",

@@ -5,7 +5,13 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 
 from ..models import Comment, EnrichedTicket, Ticket, User
-from ..models.search import SearchQueryConfig, SearchType
+from ..models.search import (
+    SearchQueryConfig,
+    SearchType,
+    TicketPriorityInput,
+    TicketStatusInput,
+    TicketTypeInput,
+)
 from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
@@ -198,12 +204,31 @@ class TagsClient(BaseClient):
 class TicketsClient(BaseClient):
     """Client for Zendesk Tickets API.
 
-    Provides access to tickets, comments, and tags through a namespace pattern.
+    Provides full CRUD operations for tickets, plus access to comments and tags
+    through a namespace pattern.
 
     Example:
         async with ZendeskClient(config) as client:
+            # Create a ticket
+            ticket = await client.tickets.create(
+                comment_body="Customer needs help with login",
+                subject="Login Issue",
+                priority="high",
+                tags=["login", "urgent"]
+            )
+
             # Get a ticket
             ticket = await client.tickets.get(12345)
+
+            # Update a ticket
+            ticket = await client.tickets.update(
+                12345,
+                status="solved",
+                comment={"body": "Issue resolved!", "public": True}
+            )
+
+            # Delete a ticket
+            await client.tickets.delete(12345)
 
             # List all tickets (returns paginator)
             async for ticket in client.tickets.list():
@@ -289,6 +314,222 @@ class TicketsClient(BaseClient):
         return ZendeskPaginator.create_organization_tickets_paginator(
             self._http, org_id, per_page=per_page, limit=limit
         )
+
+    # ==================== CRUD Operations ====================
+
+    async def create(
+        self,
+        comment_body: str,
+        *,
+        subject: Optional[str] = None,
+        priority: Optional[TicketPriorityInput] = None,
+        status: Optional[TicketStatusInput] = None,
+        ticket_type: Optional[TicketTypeInput] = None,
+        assignee_id: Optional[int] = None,
+        group_id: Optional[int] = None,
+        requester_id: Optional[int] = None,
+        submitter_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        collaborator_ids: Optional[List[int]] = None,
+        tags: Optional[List[str]] = None,
+        custom_fields: Optional[List[Dict[str, Any]]] = None,
+        external_id: Optional[str] = None,
+        public: bool = True,
+        uploads: Optional[List[str]] = None,
+    ) -> Ticket:
+        """Create a new ticket.
+
+        The only required field is comment_body which becomes the initial
+        comment/description of the ticket.
+
+        Args:
+            comment_body: The initial comment text (required)
+            subject: Ticket subject/title
+            priority: Priority level - one of: "low", "normal", "high", "urgent"
+            status: Initial status - one of: "new", "open", "pending", "hold", "solved", "closed"
+            ticket_type: Ticket type - one of: "question", "incident", "problem", "task"
+            assignee_id: Agent ID to assign the ticket to
+            group_id: Group ID to assign the ticket to
+            requester_id: User ID of the requester (defaults to authenticated user)
+            submitter_id: User ID of the submitter (defaults to authenticated user)
+            organization_id: Organization ID for the ticket
+            collaborator_ids: List of user IDs to CC on the ticket
+            tags: List of tags to apply
+            custom_fields: List of custom field dicts with 'id' and 'value' keys
+            external_id: External ID for linking to local records
+            public: If True (default), comment is visible to end users.
+                   If False, it's an internal note.
+            uploads: List of upload tokens from attachments.upload() to attach files
+
+        Returns:
+            Created Ticket object
+
+        Example:
+            # Minimal creation
+            ticket = await client.tickets.create(
+                comment_body="My printer is not working"
+            )
+
+            # Full creation
+            ticket = await client.tickets.create(
+                comment_body="Customer cannot log in to their account",
+                subject="Login Issue",
+                priority="high",
+                assignee_id=12345,
+                tags=["login", "urgent"],
+                custom_fields=[{"id": 360001234, "value": "bug"}]
+            )
+        """
+        ticket_data: Dict[str, Any] = {
+            "comment": {
+                "body": comment_body,
+                "public": public,
+            }
+        }
+
+        if uploads:
+            ticket_data["comment"]["uploads"] = uploads
+
+        if subject is not None:
+            ticket_data["subject"] = subject
+        if priority is not None:
+            ticket_data["priority"] = priority
+        if status is not None:
+            ticket_data["status"] = status
+        if ticket_type is not None:
+            ticket_data["type"] = ticket_type
+        if assignee_id is not None:
+            ticket_data["assignee_id"] = assignee_id
+        if group_id is not None:
+            ticket_data["group_id"] = group_id
+        if requester_id is not None:
+            ticket_data["requester_id"] = requester_id
+        if submitter_id is not None:
+            ticket_data["submitter_id"] = submitter_id
+        if organization_id is not None:
+            ticket_data["organization_id"] = organization_id
+        if collaborator_ids is not None:
+            ticket_data["collaborator_ids"] = collaborator_ids
+        if tags is not None:
+            ticket_data["tags"] = tags
+        if custom_fields is not None:
+            ticket_data["custom_fields"] = custom_fields
+        if external_id is not None:
+            ticket_data["external_id"] = external_id
+
+        response = await self._post("tickets.json", json={"ticket": ticket_data})
+        return Ticket(**response["ticket"])
+
+    async def update(
+        self,
+        ticket_id: int,
+        *,
+        subject: Optional[str] = None,
+        priority: Optional[TicketPriorityInput] = None,
+        status: Optional[TicketStatusInput] = None,
+        ticket_type: Optional[TicketTypeInput] = None,
+        assignee_id: Optional[int] = None,
+        group_id: Optional[int] = None,
+        organization_id: Optional[int] = None,
+        collaborator_ids: Optional[List[int]] = None,
+        tags: Optional[List[str]] = None,
+        custom_fields: Optional[List[Dict[str, Any]]] = None,
+        external_id: Optional[str] = None,
+        comment: Optional[Dict[str, Any]] = None,
+    ) -> Ticket:
+        """Update an existing ticket.
+
+        All fields are optional - only provided fields will be updated.
+        To add a comment during update, use the comment parameter with
+        a dict containing 'body' and optionally 'public' keys.
+
+        Args:
+            ticket_id: The ticket's ID
+            subject: New ticket subject/title
+            priority: New priority level - one of: "low", "normal", "high", "urgent"
+            status: New status - one of: "new", "open", "pending", "hold", "solved", "closed"
+            ticket_type: New ticket type - one of: "question", "incident", "problem", "task"
+            assignee_id: Reassign to different agent
+            group_id: Reassign to different group
+            organization_id: Change organization
+            collaborator_ids: Update list of CC'd users
+            tags: Replace all tags (for add/remove use tickets.tags client)
+            custom_fields: Update custom field values
+            external_id: Update external ID
+            comment: Add a comment with dict containing:
+                - body (str): Comment text (required)
+                - public (bool): Visible to end users (default: False)
+                - author_id (int): Override comment author
+                - uploads (List[str]): Attachment upload tokens
+
+        Returns:
+            Updated Ticket object
+
+        Example:
+            # Update status
+            ticket = await client.tickets.update(12345, status="solved")
+
+            # Update with internal note
+            ticket = await client.tickets.update(
+                12345,
+                status="pending",
+                comment={"body": "Waiting for customer response", "public": False}
+            )
+
+            # Update with public reply
+            ticket = await client.tickets.update(
+                12345,
+                status="solved",
+                comment={"body": "Issue has been resolved!", "public": True}
+            )
+        """
+        ticket_data: Dict[str, Any] = {}
+
+        if subject is not None:
+            ticket_data["subject"] = subject
+        if priority is not None:
+            ticket_data["priority"] = priority
+        if status is not None:
+            ticket_data["status"] = status
+        if ticket_type is not None:
+            ticket_data["type"] = ticket_type
+        if assignee_id is not None:
+            ticket_data["assignee_id"] = assignee_id
+        if group_id is not None:
+            ticket_data["group_id"] = group_id
+        if organization_id is not None:
+            ticket_data["organization_id"] = organization_id
+        if collaborator_ids is not None:
+            ticket_data["collaborator_ids"] = collaborator_ids
+        if tags is not None:
+            ticket_data["tags"] = tags
+        if custom_fields is not None:
+            ticket_data["custom_fields"] = custom_fields
+        if external_id is not None:
+            ticket_data["external_id"] = external_id
+        if comment is not None:
+            ticket_data["comment"] = comment
+
+        response = await self._put(f"tickets/{ticket_id}.json", json={"ticket": ticket_data})
+        return Ticket(**response["ticket"])
+
+    async def delete(self, ticket_id: int) -> bool:
+        """Delete a ticket.
+
+        Note: Deleted tickets are moved to the trash and can be recovered
+        within 30 days via the Zendesk admin UI.
+
+        Args:
+            ticket_id: The ticket's ID
+
+        Returns:
+            True if successful
+
+        Example:
+            success = await client.tickets.delete(12345)
+        """
+        await self._delete(f"tickets/{ticket_id}.json")
+        return True
 
     def _resolve_query(self, query: Union[str, SearchQueryConfig]) -> str:
         """Convert query input to Zendesk query string."""

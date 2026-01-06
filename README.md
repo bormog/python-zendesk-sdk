@@ -156,10 +156,32 @@ paginator = client.organizations.list()          # List organizations (paginator
 
 ### Tickets
 ```python
+# Read
 ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
 paginator = client.tickets.list()                      # List tickets (paginator)
 paginator = client.tickets.for_user(user_id)           # User's tickets (paginator)
 paginator = client.tickets.for_organization(org_id)    # Org's tickets (paginator)
+
+# Create
+ticket = await client.tickets.create(
+    comment_body="Customer needs help with login",
+    subject="Login Issue",
+    priority="high",                                   # low, normal, high, urgent
+    status="open",                                     # new, open, pending, hold, solved
+    ticket_type="problem",                             # question, incident, problem, task
+    tags=["login", "urgent"],
+)
+
+# Update
+ticket = await client.tickets.update(
+    ticket_id,
+    status="solved",
+    priority="normal",
+    comment={"body": "Issue resolved!", "public": True},
+)
+
+# Delete (moves to trash, recoverable for 30 days)
+await client.tickets.delete(ticket_id)
 ```
 
 ### Comments (nested under tickets)

@@ -3,6 +3,7 @@
 This example demonstrates:
 - Configuration setup
 - Basic API operations (get users, tickets, organizations)
+- Ticket CRUD (create, update, delete)
 - Pagination basics
 - Search functionality
 """
@@ -41,6 +42,29 @@ async def main() -> None:
         # Get a single ticket
         ticket = await client.tickets.get(12345)
         print(f"Ticket: {ticket.subject} (status: {ticket.status})")
+
+        # Create a new ticket
+        new_ticket = await client.tickets.create(
+            comment_body="Customer cannot access their account",
+            subject="Account Access Issue",
+            priority="high",
+            ticket_type="incident",
+            tags=["account", "access"],
+        )
+        print(f"Created ticket: #{new_ticket.id} - {new_ticket.subject}")
+
+        # Update the ticket
+        updated_ticket = await client.tickets.update(
+            new_ticket.id,
+            status="open",
+            priority="normal",
+            comment={"body": "Working on this issue", "public": False},
+        )
+        print(f"Updated ticket status: {updated_ticket.status}")
+
+        # Delete the ticket (moves to trash)
+        await client.tickets.delete(new_ticket.id)
+        print(f"Deleted ticket: #{new_ticket.id}")
 
         # Get ticket comments (returns paginator)
         comments = await client.tickets.comments.list(12345, limit=10).collect()

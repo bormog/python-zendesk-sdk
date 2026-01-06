@@ -237,6 +237,201 @@ class TestTicketsClient:
         client = self.get_client()
         assert isinstance(client.tags, TagsClient)
 
+    @pytest.mark.asyncio
+    async def test_create_minimal(self):
+        """Test create ticket with minimal parameters (only comment_body)."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": None,
+                "status": "new",
+                "description": "Help me!",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = ticket_data
+
+            result = await client.create(comment_body="Help me!")
+
+            assert isinstance(result, Ticket)
+            assert result.id == 12345
+            mock_post.assert_called_once_with(
+                "tickets.json",
+                json={"ticket": {"comment": {"body": "Help me!", "public": True}}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_full(self):
+        """Test create ticket with all parameters."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": "Login Issue",
+                "status": "open",
+                "priority": "high",
+                "tags": ["login", "urgent"],
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = ticket_data
+
+            result = await client.create(
+                comment_body="Customer cannot login",
+                subject="Login Issue",
+                priority="high",
+                status="open",
+                ticket_type="problem",
+                assignee_id=111,
+                group_id=222,
+                requester_id=333,
+                tags=["login", "urgent"],
+                custom_fields=[{"id": 360001, "value": "bug"}],
+                external_id="EXT-123",
+                public=False,
+            )
+
+            assert isinstance(result, Ticket)
+            assert result.id == 12345
+
+            # Verify all fields were sent
+            call_args = mock_post.call_args
+            payload = call_args[1]["json"]["ticket"]
+            assert payload["comment"]["body"] == "Customer cannot login"
+            assert payload["comment"]["public"] is False
+            assert payload["subject"] == "Login Issue"
+            assert payload["priority"] == "high"
+            assert payload["status"] == "open"
+            assert payload["type"] == "problem"
+            assert payload["assignee_id"] == 111
+            assert payload["group_id"] == 222
+            assert payload["requester_id"] == 333
+            assert payload["tags"] == ["login", "urgent"]
+            assert payload["custom_fields"] == [{"id": 360001, "value": "bug"}]
+            assert payload["external_id"] == "EXT-123"
+
+    @pytest.mark.asyncio
+    async def test_create_with_uploads(self):
+        """Test create ticket with file attachments."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": "Issue with attachment",
+                "status": "new",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = ticket_data
+
+            result = await client.create(
+                comment_body="See attached screenshot", subject="Issue with attachment", uploads=["token1", "token2"]
+            )
+
+            assert isinstance(result, Ticket)
+            payload = mock_post.call_args[1]["json"]["ticket"]
+            assert payload["comment"]["uploads"] == ["token1", "token2"]
+
+    @pytest.mark.asyncio
+    async def test_update_single_field(self):
+        """Test update ticket with single field."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": "Test",
+                "status": "solved",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.update(12345, status="solved")
+
+            assert isinstance(result, Ticket)
+            assert result.status == "solved"
+            mock_put.assert_called_once_with(
+                "tickets/12345.json",
+                json={"ticket": {"status": "solved"}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_with_comment(self):
+        """Test update ticket with comment."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": "Test",
+                "status": "pending",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.update(
+                12345, status="pending", comment={"body": "Waiting for customer", "public": False}
+            )
+
+            assert isinstance(result, Ticket)
+            payload = mock_put.call_args[1]["json"]["ticket"]
+            assert payload["status"] == "pending"
+            assert payload["comment"]["body"] == "Waiting for customer"
+            assert payload["comment"]["public"] is False
+
+    @pytest.mark.asyncio
+    async def test_update_multiple_fields(self):
+        """Test update ticket with multiple fields."""
+        client = self.get_client()
+        ticket_data = {
+            "ticket": {
+                "id": 12345,
+                "subject": "Updated Subject",
+                "status": "open",
+                "priority": "urgent",
+                "assignee_id": 999,
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = ticket_data
+
+            result = await client.update(
+                12345, subject="Updated Subject", priority="urgent", assignee_id=999, tags=["escalated"]
+            )
+
+            assert isinstance(result, Ticket)
+            payload = mock_put.call_args[1]["json"]["ticket"]
+            assert payload["subject"] == "Updated Subject"
+            assert payload["priority"] == "urgent"
+            assert payload["assignee_id"] == 999
+            assert payload["tags"] == ["escalated"]
+
+    @pytest.mark.asyncio
+    async def test_delete(self):
+        """Test delete ticket."""
+        client = self.get_client()
+
+        with patch.object(client, "_delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = None
+
+            result = await client.delete(12345)
+
+            assert result is True
+            mock_delete.assert_called_once_with("tickets/12345.json")
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""
