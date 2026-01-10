@@ -600,3 +600,130 @@ class TestEnrichedTicketModel:
 
         author = enriched.get_comment_author(comment)
         assert author is None
+
+    def test_enriched_ticket_get_field(self):
+        """Test get_field method."""
+        from zendesk_sdk.models import EnrichedTicket, TicketField
+
+        ticket = Ticket(id=789, subject="Test")
+        fields = {
+            123: TicketField(id=123, type="text", title="Custom Field"),
+            456: TicketField(id=456, type="tagger", title="Subscription"),
+        }
+
+        enriched = EnrichedTicket(ticket=ticket, fields=fields)
+
+        # Get existing field
+        field = enriched.get_field(123)
+        assert field is not None
+        assert field.title == "Custom Field"
+        assert field.type == "text"
+
+        # Get non-existing field
+        field = enriched.get_field(999)
+        assert field is None
+
+    def test_enriched_ticket_get_field_value(self):
+        """Test get_field_value method."""
+        from zendesk_sdk.models import EnrichedTicket
+        from zendesk_sdk.models.ticket import TicketCustomField
+
+        ticket = Ticket(
+            id=789,
+            subject="Test",
+            custom_fields=[
+                TicketCustomField(id=123, value="test_value"),
+                TicketCustomField(id=456, value="enterprise"),
+            ],
+        )
+
+        enriched = EnrichedTicket(ticket=ticket)
+
+        # Get existing field value
+        value = enriched.get_field_value(123)
+        assert value == "test_value"
+
+        value = enriched.get_field_value(456)
+        assert value == "enterprise"
+
+        # Get non-existing field value
+        value = enriched.get_field_value(999)
+        assert value is None
+
+    def test_enriched_ticket_get_field_value_no_custom_fields(self):
+        """Test get_field_value when ticket has no custom fields."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        enriched = EnrichedTicket(ticket=ticket)
+
+        value = enriched.get_field_value(123)
+        assert value is None
+
+    def test_enriched_ticket_get_field_values(self):
+        """Test get_field_values method."""
+        from zendesk_sdk.models import EnrichedTicket, TicketField
+        from zendesk_sdk.models.ticket import TicketCustomField
+
+        ticket = Ticket(
+            id=789,
+            subject="Test",
+            custom_fields=[
+                TicketCustomField(id=123, value="test_value"),
+                TicketCustomField(id=456, value="enterprise"),
+                TicketCustomField(id=789, value=None),
+            ],
+        )
+        fields = {
+            123: TicketField(id=123, type="text", title="Username"),
+            456: TicketField(id=456, type="tagger", title="Subscription"),
+            789: TicketField(id=789, type="text", title="Notes"),
+        }
+
+        enriched = EnrichedTicket(ticket=ticket, fields=fields)
+
+        values = enriched.get_field_values()
+
+        assert values == {
+            "Username": "test_value",
+            "Subscription": "enterprise",
+            "Notes": None,
+        }
+
+    def test_enriched_ticket_get_field_values_missing_definition(self):
+        """Test get_field_values when field definition is missing."""
+        from zendesk_sdk.models import EnrichedTicket, TicketField
+        from zendesk_sdk.models.ticket import TicketCustomField
+
+        ticket = Ticket(
+            id=789,
+            subject="Test",
+            custom_fields=[
+                TicketCustomField(id=123, value="known_value"),
+                TicketCustomField(id=999, value="unknown_value"),
+            ],
+        )
+        fields = {
+            123: TicketField(id=123, type="text", title="Known Field"),
+            # 999 is not in fields
+        }
+
+        enriched = EnrichedTicket(ticket=ticket, fields=fields)
+
+        values = enriched.get_field_values()
+
+        # Known field uses title, unknown uses ID as string
+        assert values == {
+            "Known Field": "known_value",
+            "999": "unknown_value",
+        }
+
+    def test_enriched_ticket_get_field_values_empty(self):
+        """Test get_field_values when ticket has no custom fields."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test")
+        enriched = EnrichedTicket(ticket=ticket)
+
+        values = enriched.get_field_values()
+        assert values == {}

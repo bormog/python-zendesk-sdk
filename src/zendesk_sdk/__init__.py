@@ -18,6 +18,7 @@ from .clients import (
     SearchClient,
     SectionsClient,
     TagsClient,
+    TicketFieldsClient,
     TicketsClient,
     UsersClient,
 )
@@ -38,6 +39,7 @@ from .models import (
     Section,
     SortOrder,
     TicketChannel,
+    TicketField,
     TicketPriority,
     TicketPriorityInput,
     TicketStatus,
@@ -56,6 +58,7 @@ __all__ = [
     "UsersClient",
     "OrganizationsClient",
     "TicketsClient",
+    "TicketFieldsClient",
     "CommentsClient",
     "TagsClient",
     "AttachmentsClient",
@@ -67,6 +70,7 @@ __all__ = [
     "ArticlesClient",
     # Models
     "EnrichedTicket",
+    "TicketField",
     "Category",
     "Section",
     "Article",

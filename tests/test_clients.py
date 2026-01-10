@@ -724,3 +724,105 @@ class TestAttachmentsClient:
             result = await client.upload(b"data", "file.txt", "text/plain")
 
             assert result == "token123"
+
+
+class TestTicketFieldsClient:
+    """Test cases for TicketFieldsClient."""
+
+    def get_client(self):
+        """Create a mock TicketFieldsClient."""
+        from zendesk_sdk.clients import TicketFieldsClient
+
+        mock_http = MagicMock()
+        return TicketFieldsClient(mock_http)
+
+    @pytest.mark.asyncio
+    async def test_get(self):
+        """Test get ticket field by ID."""
+        client = self.get_client()
+        field_data = {
+            "ticket_field": {
+                "id": 123,
+                "type": "text",
+                "title": "Custom Field",
+                "active": True,
+                "required": False,
+                "removable": True,
+            }
+        }
+
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = field_data
+
+            from zendesk_sdk.models import TicketField
+
+            result = await client.get(123)
+
+            assert isinstance(result, TicketField)
+            assert result.id == 123
+            assert result.title == "Custom Field"
+            assert result.type == "text"
+            mock_get.assert_called_once_with("ticket_fields/123.json")
+
+    @pytest.mark.asyncio
+    async def test_get_by_title_found(self):
+        """Test find ticket field by title."""
+        client = self.get_client()
+
+        from zendesk_sdk.models import TicketField
+
+        async def mock_iter(self):
+            yield TicketField(id=1, type="text", title="Status")
+            yield TicketField(id=2, type="text", title="Custom Field")
+            yield TicketField(id=3, type="text", title="Priority")
+
+        with patch.object(client, "list") as mock_list:
+            mock_paginator = MagicMock()
+            mock_paginator.__aiter__ = mock_iter
+            mock_list.return_value = mock_paginator
+
+            result = await client.get_by_title("Custom Field")
+
+            assert result is not None
+            assert result.id == 2
+            assert result.title == "Custom Field"
+
+    @pytest.mark.asyncio
+    async def test_get_by_title_case_insensitive(self):
+        """Test find ticket field by title is case insensitive."""
+        client = self.get_client()
+
+        from zendesk_sdk.models import TicketField
+
+        async def mock_iter(self):
+            yield TicketField(id=1, type="text", title="Custom Field")
+
+        with patch.object(client, "list") as mock_list:
+            mock_paginator = MagicMock()
+            mock_paginator.__aiter__ = mock_iter
+            mock_list.return_value = mock_paginator
+
+            result = await client.get_by_title("CUSTOM FIELD")
+
+            assert result is not None
+            assert result.id == 1
+
+    @pytest.mark.asyncio
+    async def test_get_by_title_not_found(self):
+        """Test find ticket field by title when not found."""
+        client = self.get_client()
+
+        from zendesk_sdk.models import TicketField
+
+        async def mock_iter(self):
+            yield TicketField(id=1, type="text", title="Status")
+            yield TicketField(id=2, type="text", title="Priority")
+
+        with patch.object(client, "list") as mock_list:
+            mock_paginator = MagicMock()
+            mock_paginator.__aiter__ = mock_iter
+            mock_list.return_value = mock_paginator
+
+            result = await client.get_by_title("NonExistent")
+
+            assert result is None

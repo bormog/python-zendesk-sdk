@@ -23,6 +23,7 @@ Modern Python SDK for Zendesk API, designed for automation and AI agents.
   - [Tickets](#tickets)
   - [Comments](#comments-nested-under-tickets)
   - [Tags](#tags-nested-under-tickets)
+  - [Ticket Fields](#ticket-fields)
   - [Enriched Tickets](#enriched-tickets)
   - [Attachments](#attachments)
   - [Search](#search)
@@ -200,9 +201,22 @@ tags = await client.tickets.tags.set(ticket_id, ["new"])  # Replace all tags
 tags = await client.tickets.tags.remove(ticket_id, ["old"]) # Remove tags
 ```
 
+### Ticket Fields
+```python
+# Get all ticket fields (system + custom)
+async for field in client.ticket_fields.list():
+    print(f"{field.title}: {field.type}")
+
+# Get specific field by ID (cached)
+field = await client.ticket_fields.get(field_id)
+
+# Find field by title (case-insensitive)
+field = await client.ticket_fields.get_by_title("Subscription")
+```
+
 ### Enriched Tickets
 
-Load tickets with all related data (comments + users) in minimum API requests:
+Load tickets with all related data (comments, users, field definitions) in minimum API requests:
 
 ```python
 from zendesk_sdk import SearchQueryConfig
@@ -217,6 +231,13 @@ print(f"Assignee: {enriched.assignee.name if enriched.assignee else 'Unassigned'
 for comment in enriched.comments:
     author = enriched.get_comment_author(comment)
     print(f"Comment by {author.name}: {comment.body[:50]}...")
+
+# Access custom field values with human-readable names
+field_values = enriched.get_field_values()
+print(f"Subscription: {field_values.get('Subscription')}")
+
+# Or get specific field value by ID
+value = enriched.get_field_value(360001234)
 
 # Search with all data loaded (using SearchQueryConfig)
 config = SearchQueryConfig.tickets(
@@ -439,6 +460,7 @@ The SDK provides specific exception classes for different error types:
 from zendesk_sdk.exceptions import (
     ZendeskAuthException,
     ZendeskHTTPException,
+    ZendeskPaginationException,
     ZendeskRateLimitException,
     ZendeskTimeoutException,
     ZendeskValidationException,
@@ -459,6 +481,9 @@ async with ZendeskClient(config) as client:
     except ZendeskTimeoutException as e:
         # Request timeout
         print(f"Timeout: {e.message}")
+    except ZendeskPaginationException as e:
+        # Pagination errors (e.g., Zendesk 1000 result limit)
+        print(f"Pagination error: {e.message}")
 ```
 
 ### Automatic Retry
@@ -489,6 +514,7 @@ The SDK includes built-in caching for frequently accessed resources. Caching is 
 |----------|-----|----------|
 | Users | 5 min | 1000 |
 | Organizations | 10 min | 500 |
+| Ticket Fields | 30 min | 200 |
 | Articles | 15 min | 500 |
 | Categories | 30 min | 200 |
 | Sections | 30 min | 200 |

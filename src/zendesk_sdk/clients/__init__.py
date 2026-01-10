@@ -4,6 +4,7 @@ from .attachments import AttachmentsClient
 from .help_center import ArticlesClient, CategoriesClient, HelpCenterClient, SectionsClient
 from .organizations import OrganizationsClient
 from .search import SearchClient
+from .ticket_fields import TicketFieldsClient
 from .tickets import CommentsClient, TagsClient, TicketsClient
 from .users import UsersClient
 
@@ -12,6 +13,7 @@ __all__ = [
     "UsersClient",
     "OrganizationsClient",
     "TicketsClient",
+    "TicketFieldsClient",
     "AttachmentsClient",
     "SearchClient",
     # Ticket sub-clients

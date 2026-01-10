@@ -1,8 +1,9 @@
 """Enriched tickets example for Zendesk SDK.
 
 This example demonstrates:
-- Loading tickets with all related data (comments + users)
+- Loading tickets with all related data (comments, users, field definitions)
 - Using EnrichedTicket for efficient data access
+- Accessing custom field values with human-readable names
 - Minimizing API requests with batch loading
 """
 
@@ -22,7 +23,8 @@ async def main() -> None:
         # ==================== Single enriched ticket ====================
 
         # Get a single ticket with all related data
-        # This makes 2 API calls: ticket + comments (with sideloaded users)
+        # This makes 2 parallel API calls: ticket (with users) + fields
+        # Then fetches comments
         enriched = await client.tickets.get_enriched(12345)
 
         print(f"Ticket: {enriched.ticket.subject}")
@@ -39,6 +41,26 @@ async def main() -> None:
             print(f"Assignee: {assignee.name}")
         else:
             print("Ticket is unassigned")
+
+        # ==================== Custom field values ====================
+
+        # Get all custom field values as dict with human-readable names
+        field_values = enriched.get_field_values()
+        print(f"\nCustom fields ({len(field_values)}):")
+        for name, value in field_values.items():
+            print(f"  {name}: {value}")
+
+        # Or get specific field value by ID
+        subscription = enriched.get_field_value(360001234)  # Replace with your field ID
+        if subscription:
+            print(f"\nSubscription level: {subscription}")
+
+        # Get field definition for more details
+        field = enriched.get_field(360001234)
+        if field:
+            print(f"Field type: {field.type}, Required: {field.required}")
+
+        # ==================== Comments with authors ====================
 
         # Process comments with author information
         print(f"\nComments ({len(enriched.comments)}):")

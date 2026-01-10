@@ -12,6 +12,7 @@ if TYPE_CHECKING:
         HelpCenterClient,
         OrganizationsClient,
         SearchClient,
+        TicketFieldsClient,
         TicketsClient,
         UsersClient,
     )
@@ -130,6 +131,31 @@ class ZendeskClient:
         from .clients import TicketsClient
 
         return TicketsClient(self.http_client)
+
+    @cached_property
+    def ticket_fields(self) -> "TicketFieldsClient":
+        """Access Ticket Fields API.
+
+        Provides access to ticket field definitions, including system
+        and custom fields. Essential for understanding ticket schema.
+
+        Example:
+            # List all ticket fields
+            async for field in client.ticket_fields.list():
+                print(f"{field.title}: {field.type}")
+
+            # Get specific field
+            field = await client.ticket_fields.get(12345)
+
+            # Get only custom fields
+            custom = await client.ticket_fields.list_custom()
+
+            # Get only active fields
+            active = await client.ticket_fields.list_active()
+        """
+        from .clients import TicketFieldsClient
+
+        return TicketFieldsClient(self.http_client, self.config.cache)
 
     @cached_property
     def attachments(self) -> "AttachmentsClient":

@@ -4,7 +4,7 @@ import asyncio
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 
-from ..models import Comment, EnrichedTicket, Ticket, User
+from ..models import Comment, EnrichedTicket, Ticket, TicketField, User
 from ..models.search import (
     SearchQueryConfig,
     SearchType,
@@ -248,10 +248,8 @@ class TicketsClient(BaseClient):
     """
 
     def __init__(self, http_client: "HTTPClient") -> None:
-        """Initialize tickets client with nested clients."""
+        """Initialize tickets client."""
         super().__init__(http_client)
-        self._comments: Optional[CommentsClient] = None
-        self._tags: Optional[TagsClient] = None
 
     @cached_property
     def comments(self) -> CommentsClient:
@@ -534,12 +532,10 @@ class TicketsClient(BaseClient):
     def _resolve_query(self, query: Union[str, SearchQueryConfig]) -> str:
         """Convert query input to Zendesk query string."""
         if isinstance(query, SearchQueryConfig):
-            # Force ticket type and get query string
             if query.type != SearchType.TICKET:
                 query = query.model_copy(update={"type": SearchType.TICKET})
             return query.to_query()
-        else:
-            return f"type:ticket {query}"
+        return f"type:ticket {query}"
 
     # ==================== Enriched Ticket Methods ====================
 
@@ -586,16 +582,38 @@ class TicketsClient(BaseClient):
         users = self._extract_users_from_response(response)
         return comments, users
 
-    async def _build_enriched_ticket(self, ticket: Ticket, ticket_users: Dict[int, User]) -> EnrichedTicket:
+    async def _fetch_fields(self) -> Dict[int, TicketField]:
+        """Fetch all ticket field definitions using paginator."""
+        paginator = ZendeskPaginator.create_ticket_fields_paginator(self._http)
+        fields: Dict[int, TicketField] = {}
+        async for field in paginator:
+            if field.id is not None:
+                fields[field.id] = field
+        return fields
+
+    async def _build_enriched_ticket(
+        self,
+        ticket: Ticket,
+        ticket_users: Dict[int, User],
+        fields: Optional[Dict[int, TicketField]] = None,
+    ) -> EnrichedTicket:
         """Build EnrichedTicket by fetching comments and merging users."""
         if ticket.id is None:
             raise ValueError("Ticket must have an ID to fetch full data")
         comments, comment_users = await self._fetch_comments_with_users(ticket.id)
         all_users = {**ticket_users, **comment_users}
-        return EnrichedTicket(ticket=ticket, comments=comments, users=all_users)
+        return EnrichedTicket(
+            ticket=ticket,
+            comments=comments,
+            users=all_users,
+            fields=fields or {},
+        )
 
     async def _build_enriched_tickets(
-        self, tickets: List[Ticket], ticket_users: Dict[int, User]
+        self,
+        tickets: List[Ticket],
+        ticket_users: Dict[int, User],
+        fields: Optional[Dict[int, TicketField]] = None,
     ) -> List[EnrichedTicket]:
         """Build list of EnrichedTicket by fetching comments in parallel."""
         if not tickets:
@@ -624,23 +642,32 @@ class TicketsClient(BaseClient):
 
             this_ticket_users = {uid: user for uid, user in ticket_users.items() if uid in ticket_user_ids}
             all_users = {**this_ticket_users, **comment_users}
-            enriched_tickets.append(EnrichedTicket(ticket=ticket, comments=comments, users=all_users))
+            enriched_tickets.append(EnrichedTicket(
+                ticket=ticket,
+                comments=comments,
+                users=all_users,
+                fields=fields or {},
+            ))
 
         return enriched_tickets
 
     async def get_enriched(self, ticket_id: int) -> EnrichedTicket:
-        """Get a ticket with all related data: comments and users.
+        """Get a ticket with all related data: comments, users, and field definitions.
 
         Args:
             ticket_id: The ticket's ID
 
         Returns:
-            EnrichedTicket object containing ticket, comments, and all related users
+            EnrichedTicket object containing ticket, comments, users, and field definitions
         """
-        response = await self._get(f"tickets/{ticket_id}.json", params={"include": "users"})
+        # Fetch ticket with users and fields in parallel
+        ticket_task = self._get(f"tickets/{ticket_id}.json", params={"include": "users"})
+        fields_task = self._fetch_fields()
+        response, fields = await asyncio.gather(ticket_task, fields_task)
+
         ticket = Ticket(**response["ticket"])
         ticket_users = self._extract_users_from_response(response)
-        return await self._build_enriched_ticket(ticket, ticket_users)
+        return await self._build_enriched_ticket(ticket, ticket_users, fields)
 
     async def search_enriched(
         self,
@@ -661,19 +688,21 @@ class TicketsClient(BaseClient):
 
         Example:
             # Iterate through enriched tickets
-            async for item in client.tickets.search_enriched(config, limit=10):
+            async for item in client.tickets.search_enriched("status:open", limit=10):
                 print(f"Ticket: {item.ticket.subject}")
                 print(f"Requester: {item.requester.name}")
                 print(f"Comments: {len(item.comments)}")
 
-            # Collect to list using paginator
-            paginator = client.tickets.search_enriched(config)
-            enriched = [e async for e in paginator]
+            # Collect to list
+            enriched = [e async for e in client.tickets.search_enriched(query)]
         """
         full_query = self._resolve_query(query)
         paginator = ZendeskPaginator.create_search_tickets_paginator(
             self._http, query=full_query, per_page=100, limit=limit
         )
+
+        # Fetch fields once at the start
+        fields = await self._fetch_fields()
 
         # Process in batches for efficient user fetching
         batch: List[Ticket] = []
@@ -681,17 +710,21 @@ class TicketsClient(BaseClient):
             batch.append(ticket)
 
             if len(batch) >= 100:
-                async for enriched in self._enrich_ticket_batch(batch):
+                async for enriched in self._enrich_ticket_batch(batch, fields):
                     yield enriched
                 batch = []
 
         # Process remaining
         if batch:
-            async for enriched in self._enrich_ticket_batch(batch):
+            async for enriched in self._enrich_ticket_batch(batch, fields):
                 yield enriched
 
-    async def _enrich_ticket_batch(self, tickets: List[Ticket]) -> AsyncIterator[EnrichedTicket]:
-        """Enrich a batch of tickets with users and comments."""
+    async def _enrich_ticket_batch(
+        self,
+        tickets: List[Ticket],
+        fields: Optional[Dict[int, TicketField]] = None,
+    ) -> AsyncIterator[EnrichedTicket]:
+        """Enrich a batch of tickets with users, comments, and fields."""
         if not tickets:
             return
 
@@ -700,6 +733,6 @@ class TicketsClient(BaseClient):
         ticket_users = await self._fetch_users_batch(user_ids)
 
         # Fetch comments and build enriched tickets
-        enriched_list = await self._build_enriched_tickets(tickets, ticket_users)
+        enriched_list = await self._build_enriched_tickets(tickets, ticket_users, fields)
         for enriched in enriched_list:
             yield enriched

@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar
 
 from .exceptions import ZendeskPaginationException
-from .models import Article, Category, Comment, Organization, Section, Ticket, User
+from .models import Article, Category, Comment, Organization, Section, Ticket, TicketField, User
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +13,25 @@ T = TypeVar("T")
 
 
 class PaginationInfo:
-    """Information about pagination state."""
+    """Information about pagination state.
+
+    Stores metadata from paginated API responses including current page,
+    total count, and navigation cursors/URLs.
+
+    Attributes:
+        page: Current page number (1-based, for offset pagination).
+        per_page: Number of items per page.
+        count: Total number of items across all pages.
+        next_page: URL to the next page (if available).
+        previous_page: URL to the previous page (if available).
+        has_more: Whether more pages are available.
+
+    Example:
+        paginator = client.tickets.list()
+        await paginator.get_page(1)
+        info = paginator.pagination_info
+        print(f"Page {info.page}, total: {info.count}")
+    """
 
     def __init__(
         self,
@@ -55,7 +73,37 @@ class PaginationInfo:
 
 
 class Paginator(ABC, Generic[T]):
-    """Abstract base class for paginators."""
+    """Abstract base class for paginators.
+
+    Provides common interface for paginating through Zendesk API results.
+    Supports async iteration, page-by-page fetching, and collecting all results.
+
+    Subclasses implement offset-based (OffsetPaginator) or cursor-based
+    (CursorPaginator) pagination strategies.
+
+    Args:
+        http_client: HTTP client for making API requests.
+        path: API endpoint path.
+        params: Additional query parameters.
+        per_page: Number of results per page.
+        limit: Maximum total items to return (None = unlimited).
+
+    Example:
+        # Async iteration (most common)
+        async for ticket in client.tickets.list():
+            print(ticket.subject)
+
+        # Limit results
+        async for ticket in client.tickets.list(limit=50):
+            print(ticket.subject)
+
+        # Get specific page
+        paginator = client.tickets.list()
+        page_items = await paginator.get_page(2)
+
+        # Collect all to list
+        all_items = await paginator.collect()
+    """
 
     def __init__(
         self,
@@ -174,7 +222,20 @@ class Paginator(ABC, Generic[T]):
 
 
 class OffsetPaginator(Paginator[T]):
-    """Offset-based paginator using page and per_page parameters."""
+    """Offset-based paginator using page and per_page parameters.
+
+    Standard pagination for most Zendesk endpoints. Uses page numbers
+    to navigate through results.
+
+    Note:
+        Zendesk Search API limits offset pagination to approximately
+        1000 results. Use cursor-based export endpoints for larger datasets.
+
+    Example:
+        paginator = client.users.list(per_page=50)
+        async for user in paginator:
+            print(user.name)
+    """
 
     async def _fetch_page(self, page_params: Dict[str, Any]) -> Dict[str, Any]:
         """Fetch page using HTTP client."""
@@ -222,7 +283,20 @@ class OffsetPaginator(Paginator[T]):
 
 
 class CursorPaginator(Paginator[T]):
-    """Cursor-based paginator for large datasets."""
+    """Cursor-based paginator for large datasets.
+
+    Uses opaque cursor tokens instead of page numbers. Provides stable
+    iteration over changing data and supports datasets larger than
+    offset pagination limits.
+
+    Note:
+        Cursors typically expire after 1 hour. For long-running exports,
+        handle cursor expiration gracefully.
+
+    Example:
+        async for ticket in client.search.export_tickets("status:open"):
+            print(ticket.subject)
+    """
 
     def __init__(
         self,
@@ -295,6 +369,18 @@ class SearchExportPaginator(CursorPaginator[Dict[str, Any]]):
     - Uses page[size] instead of per_page
     - Returns links.next and meta.after_cursor
     - Cursor expires after 1 hour
+
+    Args:
+        http_client: HTTP client for making API requests.
+        query: Zendesk search query string.
+        filter_type: Object type to filter (ticket, user, organization, group).
+        page_size: Results per page (max 1000, recommended 100).
+        limit: Maximum total items to return (None = unlimited).
+
+    Example:
+        paginator = SearchExportPaginator(http_client, "*", "ticket", 100)
+        async for result in paginator:
+            print(result)
     """
 
     def __init__(
@@ -351,7 +437,23 @@ class SearchExportPaginator(CursorPaginator[Dict[str, Any]]):
 
 
 class ZendeskPaginator:
-    """Factory for creating Zendesk-specific paginators."""
+    """Factory for creating Zendesk-specific paginators.
+
+    Provides static methods to create pre-configured paginators for
+    various Zendesk API endpoints. Each method returns a paginator
+    that handles response parsing and model instantiation.
+
+    This is an internal factory class. Users should access paginators
+    through the client API methods instead.
+
+    Example:
+        # Internal usage (not recommended for external use)
+        paginator = ZendeskPaginator.create_tickets_paginator(http_client)
+
+        # Preferred: use client methods
+        async for ticket in client.tickets.list():
+            print(ticket.subject)
+    """
 
     @staticmethod
     def create_users_paginator(
@@ -430,6 +532,18 @@ class ZendeskPaginator:
                 return [Organization(**o) for o in response.get("organizations", [])]
 
         return OrganizationsPaginator(http_client, "organizations.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_ticket_fields_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[TicketField]:
+        """Create paginator for ticket fields endpoint."""
+
+        class TicketFieldsPaginator(OffsetPaginator[TicketField]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[TicketField]:
+                return [TicketField(**f) for f in response.get("ticket_fields", [])]
+
+        return TicketFieldsPaginator(http_client, "ticket_fields.json", per_page=per_page, limit=limit)
 
     @staticmethod
     def create_search_paginator(
