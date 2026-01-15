@@ -29,7 +29,7 @@ from .ticket import (
     TicketMetrics,
     TicketVia,
 )
-from .user import User, UserField, UserIdentity, UserPhoto
+from .user import PasswordRequirements, User, UserField, UserIdentity, UserPhoto
 
 __all__ = [
     # Base
@@ -39,6 +39,7 @@ __all__ = [
     "UserField",
     "UserIdentity",
     "UserPhoto",
+    "PasswordRequirements",
     # Organization models
     "Organization",
     "OrganizationField",

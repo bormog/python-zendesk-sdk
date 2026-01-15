@@ -50,25 +50,57 @@ class OrganizationsClient(BaseClient):
     async def _get_impl(self, org_id: int) -> Organization:
         """Get a specific organization by ID.
 
-        Results are cached based on cache configuration.
+        Retrieves detailed information about a single organization.
+        Results are cached based on cache configuration to reduce API calls.
 
         Args:
-            org_id: The organization's ID
+            org_id: The unique identifier of the organization to retrieve
 
         Returns:
-            Organization object
+            Organization object containing all organization details including
+            name, domain names, tags, and custom fields
+
+        Example:
+            org = await client.organizations.get(12345)
+            print(f"Organization: {org.name}")
+            print(f"Domains: {org.domain_names}")
         """
         response = await self._get(f"organizations/{org_id}.json")
         return Organization(**response["organization"])
 
     def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Organization]":
-        """Get paginated list of organizations.
+        """Get paginated list of all organizations.
+
+        Returns a paginator that can be used to iterate through all organizations
+        in the Zendesk account. The paginator handles cursor-based pagination
+        automatically and supports various iteration patterns.
 
         Args:
-            per_page: Number of organizations per page (max 100)
-            limit: Maximum number of items to return when iterating (None = no limit)
+            per_page: Number of organizations to fetch per API request (max 100).
+                Higher values reduce API calls but increase response size.
+            limit: Maximum total number of organizations to return when iterating.
+                Use None (default) for no limit. Useful for testing or when you
+                only need a subset of organizations.
 
         Returns:
-            Paginator for iterating through all organizations
+            Paginator[Organization] that supports:
+            - Async iteration: `async for org in client.organizations.list()`
+            - Page access: `await client.organizations.list().get_page(2)`
+            - Collection: `await client.organizations.list().collect()`
+
+        Example:
+            # Iterate through all organizations
+            async for org in client.organizations.list():
+                print(f"{org.id}: {org.name}")
+
+            # Get first 50 organizations as a list
+            orgs = await client.organizations.list(limit=50).collect()
+
+            # Get a specific page
+            page_orgs = await client.organizations.list().get_page(1)
+
+            # Process with custom page size
+            async for org in client.organizations.list(per_page=25):
+                process_organization(org)
         """
         return ZendeskPaginator.create_organizations_paginator(self._http, per_page=per_page, limit=limit)

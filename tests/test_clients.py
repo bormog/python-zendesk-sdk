@@ -112,6 +112,378 @@ class TestUsersClient:
 
         assert result == {}
 
+    @pytest.mark.asyncio
+    async def test_me(self):
+        """Test get current user."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "Current User",
+                "email": "me@example.com",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = user_data
+
+            result = await client.me()
+
+            assert isinstance(result, User)
+            assert result.name == "Current User"
+            mock_get.assert_called_once_with("users/me.json")
+
+    @pytest.mark.asyncio
+    async def test_create_minimal(self):
+        """Test create user with minimal parameters."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "New User",
+                "email": None,
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = user_data
+
+            result = await client.create(name="New User")
+
+            assert isinstance(result, User)
+            assert result.id == 123
+            mock_post.assert_called_once_with(
+                "users.json",
+                json={"user": {"name": "New User"}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_full(self):
+        """Test create user with all parameters."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "John Doe",
+                "email": "john@example.com",
+                "role": "agent",
+                "verified": True,
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = user_data
+
+            result = await client.create(
+                name="John Doe",
+                email="john@example.com",
+                role="agent",
+                verified=True,
+                external_id="EXT-123",
+                organization_id=999,
+                phone="+1234567890",
+                tags=["vip"],
+                user_fields={"department": "Sales"},
+            )
+
+            assert isinstance(result, User)
+            payload = mock_post.call_args[1]["json"]["user"]
+            assert payload["name"] == "John Doe"
+            assert payload["email"] == "john@example.com"
+            assert payload["role"] == "agent"
+            assert payload["verified"] is True
+            assert payload["external_id"] == "EXT-123"
+            assert payload["organization_id"] == 999
+            assert payload["phone"] == "+1234567890"
+            assert payload["tags"] == ["vip"]
+            assert payload["user_fields"] == {"department": "Sales"}
+
+    @pytest.mark.asyncio
+    async def test_create_or_update(self):
+        """Test create or update user."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "Upserted User",
+                "email": "upsert@example.com",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = user_data
+
+            result = await client.create_or_update(
+                name="Upserted User",
+                email="upsert@example.com",
+                external_id="CRM-123",
+            )
+
+            assert isinstance(result, User)
+            mock_post.assert_called_once()
+            assert "users/create_or_update.json" in mock_post.call_args[0]
+
+    @pytest.mark.asyncio
+    async def test_create_many(self):
+        """Test create multiple users."""
+        client = self.get_client()
+        job_data = {
+            "job_status": {
+                "id": "job-123",
+                "status": "queued",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = job_data
+
+            result = await client.create_many(
+                [
+                    {"name": "User 1", "email": "u1@example.com"},
+                    {"name": "User 2", "email": "u2@example.com"},
+                ]
+            )
+
+            assert "job_status" in result
+            mock_post.assert_called_once_with(
+                "users/create_many.json",
+                json={
+                    "users": [
+                        {"name": "User 1", "email": "u1@example.com"},
+                        {"name": "User 2", "email": "u2@example.com"},
+                    ]
+                },
+            )
+
+    @pytest.mark.asyncio
+    async def test_update(self):
+        """Test update user."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "Updated User",
+                "phone": "+9999999999",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = user_data
+
+            result = await client.update(123, phone="+9999999999")
+
+            assert isinstance(result, User)
+            mock_put.assert_called_once_with(
+                "users/123.json",
+                json={"user": {"phone": "+9999999999"}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_multiple_fields(self):
+        """Test update user with multiple fields."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "New Name",
+                "tags": ["updated"],
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = user_data
+
+            result = await client.update(
+                123,
+                name="New Name",
+                tags=["updated"],
+                user_fields={"status": "active"},
+            )
+
+            assert isinstance(result, User)
+            payload = mock_put.call_args[1]["json"]["user"]
+            assert payload["name"] == "New Name"
+            assert payload["tags"] == ["updated"]
+            assert payload["user_fields"] == {"status": "active"}
+
+    @pytest.mark.asyncio
+    async def test_update_many(self):
+        """Test update multiple users."""
+        client = self.get_client()
+        job_data = {"job_status": {"id": "job-456"}}
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = job_data
+
+            result = await client.update_many(
+                [123, 456],
+                organization_id=999,
+                tags=["bulk"],
+            )
+
+            assert "job_status" in result
+            assert "users/update_many.json?ids=123,456" in mock_put.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_delete(self):
+        """Test delete user."""
+        client = self.get_client()
+
+        with patch.object(client, "_delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = None
+
+            result = await client.delete(123)
+
+            assert result is True
+            mock_delete.assert_called_once_with("users/123.json")
+
+    @pytest.mark.asyncio
+    async def test_delete_many(self):
+        """Test delete multiple users."""
+        client = self.get_client()
+        job_data = {"job_status": {"id": "job-789"}}
+
+        with patch.object(client, "_delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = job_data
+
+            result = await client.delete_many([123, 456])
+
+            assert "job_status" in result
+            assert "users/destroy_many.json?ids=123,456" in mock_delete.call_args[0][0]
+
+    @pytest.mark.asyncio
+    async def test_permanently_delete(self):
+        """Test permanently delete user."""
+        client = self.get_client()
+        delete_data = {"deleted_user": {"id": 123}}
+
+        with patch.object(client, "_delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = delete_data
+
+            await client.permanently_delete(123)
+
+            mock_delete.assert_called_once_with("deleted_users/123.json")
+
+    @pytest.mark.asyncio
+    async def test_set_password(self):
+        """Test set user password."""
+        client = self.get_client()
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = {}
+
+            result = await client.set_password(123, "NewPass123!")
+
+            assert result is True
+            mock_post.assert_called_once_with(
+                "users/123/password.json",
+                json={"password": "NewPass123!"},
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_password_requirements(self):
+        """Test get password requirements."""
+        from zendesk_sdk.models import PasswordRequirements
+
+        client = self.get_client()
+        req_data = {
+            "requirements": [
+                "must be at least 8 characters",
+                "must include letters in mixed case",
+                "must include numbers",
+            ]
+        }
+
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = req_data
+
+            result = await client.get_password_requirements(123)
+
+            assert isinstance(result, PasswordRequirements)
+            assert len(result.rules) == 3
+            assert "must be at least 8 characters" in result.rules
+            mock_get.assert_called_once_with("users/123/password/requirements.json")
+
+    @pytest.mark.asyncio
+    async def test_suspend(self):
+        """Test suspend user."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "Suspended User",
+                "suspended": True,
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = user_data
+
+            result = await client.suspend(123)
+
+            assert isinstance(result, User)
+            assert result.suspended is True
+            mock_put.assert_called_once_with(
+                "users/123.json",
+                json={"user": {"suspended": True}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_unsuspend(self):
+        """Test unsuspend user."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 123,
+                "name": "Active User",
+                "suspended": False,
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = user_data
+
+            result = await client.unsuspend(123)
+
+            assert isinstance(result, User)
+            assert result.suspended is False
+            mock_put.assert_called_once_with(
+                "users/123.json",
+                json={"user": {"suspended": False}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_merge(self):
+        """Test merge users."""
+        client = self.get_client()
+        user_data = {
+            "user": {
+                "id": 456,
+                "name": "Merged User",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = user_data
+
+            result = await client.merge(123, 456)
+
+            assert isinstance(result, User)
+            assert result.id == 456
+            mock_put.assert_called_once_with(
+                "users/123/merge.json",
+                json={"user": {"id": 456}},
+            )
+
 
 class TestOrganizationsClient:
     """Test cases for OrganizationsClient."""

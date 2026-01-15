@@ -39,6 +39,9 @@ class CommentsClient(BaseClient):
     def list(self, ticket_id: int, per_page: int = 100, limit: Optional[int] = None) -> "OffsetPaginator[Comment]":
         """Get comments for a specific ticket with pagination.
 
+        Retrieves all comments (both public and private) for a ticket in
+        chronological order. Use async iteration to process comments.
+
         Args:
             ticket_id: The ticket's ID
             per_page: Number of comments per page (max 100)
@@ -46,6 +49,15 @@ class CommentsClient(BaseClient):
 
         Returns:
             Paginator for iterating through comments
+
+        Example:
+            # Iterate through all comments
+            async for comment in client.tickets.comments.list(12345):
+                print(f"{comment.author_id}: {comment.body}")
+
+            # Limit to first 10 comments
+            async for comment in client.tickets.comments.list(12345, limit=10):
+                print(comment.body)
         """
         return ZendeskPaginator.create_ticket_comments_paginator(self._http, ticket_id, per_page=per_page, limit=limit)
 
@@ -99,7 +111,8 @@ class CommentsClient(BaseClient):
     async def make_private(self, ticket_id: int, comment_id: int) -> bool:
         """Make a public comment private (convert to internal note).
 
-        This action is irreversible.
+        This action is irreversible. Once a comment is made private,
+        it cannot be made public again.
 
         Args:
             ticket_id: The ticket's ID
@@ -107,12 +120,20 @@ class CommentsClient(BaseClient):
 
         Returns:
             True if successful
+
+        Example:
+            # Convert a public comment to an internal note
+            success = await client.tickets.comments.make_private(12345, 67890)
         """
         await self._put(f"tickets/{ticket_id}/comments/{comment_id}/make_private.json")
         return True
 
     async def redact(self, ticket_id: int, comment_id: int, text: str) -> Comment:
         """Permanently redact (remove) a string from a comment.
+
+        Replaces the specified text with a placeholder indicating redaction.
+        Use this to remove sensitive information like credit card numbers,
+        passwords, or personal data.
 
         Warning: This action is PERMANENT and cannot be undone.
 
@@ -122,7 +143,15 @@ class CommentsClient(BaseClient):
             text: The exact text string to redact from the comment
 
         Returns:
-            Updated Comment object
+            Updated Comment object with redacted text
+
+        Example:
+            # Redact a credit card number from a comment
+            comment = await client.tickets.comments.redact(
+                ticket_id=12345,
+                comment_id=67890,
+                text="4111-1111-1111-1111"
+            )
         """
         response = await self._put(
             f"tickets/{ticket_id}/comments/{comment_id}/redact.json",
@@ -152,11 +181,17 @@ class TagsClient(BaseClient):
     async def get(self, ticket_id: int) -> List[str]:
         """Get all tags for a ticket.
 
+        Retrieves the current list of tags applied to a ticket.
+
         Args:
             ticket_id: The ticket's ID
 
         Returns:
             List of tag strings
+
+        Example:
+            tags = await client.tickets.tags.get(12345)
+            print(f"Tags: {', '.join(tags)}")
         """
         response = await self._get(f"tickets/{ticket_id}/tags.json")
         return response.get("tags", [])
@@ -164,12 +199,19 @@ class TagsClient(BaseClient):
     async def add(self, ticket_id: int, tags: List[str]) -> List[str]:
         """Add tags to a ticket without removing existing tags.
 
+        Tags that already exist on the ticket will be ignored (no duplicates).
+
         Args:
             ticket_id: The ticket's ID
             tags: List of tags to add
 
         Returns:
             Updated list of all tags on the ticket
+
+        Example:
+            # Add VIP and urgent tags
+            all_tags = await client.tickets.tags.add(12345, ["vip", "urgent"])
+            print(f"All tags now: {all_tags}")
         """
         response = await self._put(f"tickets/{ticket_id}/tags.json", json={"tags": tags})
         return response.get("tags", [])
@@ -177,12 +219,19 @@ class TagsClient(BaseClient):
     async def set(self, ticket_id: int, tags: List[str]) -> List[str]:
         """Replace all tags on a ticket with a new set.
 
+        Removes all existing tags and sets only the specified tags.
+        Use this when you want complete control over the tag list.
+
         Args:
             ticket_id: The ticket's ID
             tags: List of tags to set (replaces all existing)
 
         Returns:
             Updated list of tags on the ticket
+
+        Example:
+            # Replace all tags with a new set
+            tags = await client.tickets.tags.set(12345, ["resolved", "billing"])
         """
         response = await self._post(f"tickets/{ticket_id}/tags.json", json={"tags": tags})
         return response.get("tags", [])
@@ -190,12 +239,19 @@ class TagsClient(BaseClient):
     async def remove(self, ticket_id: int, tags: List[str]) -> List[str]:
         """Remove specific tags from a ticket.
 
+        Tags that do not exist on the ticket will be silently ignored.
+
         Args:
             ticket_id: The ticket's ID
             tags: List of tags to remove
 
         Returns:
             Updated list of remaining tags on the ticket
+
+        Example:
+            # Remove specific tags
+            remaining = await client.tickets.tags.remove(12345, ["old-tag", "obsolete"])
+            print(f"Remaining tags: {remaining}")
         """
         response = await self._delete(f"tickets/{ticket_id}/tags.json", json={"tags": tags})
         return response.get("tags", []) if response else []
@@ -264,17 +320,28 @@ class TicketsClient(BaseClient):
     async def get(self, ticket_id: int) -> Ticket:
         """Get a specific ticket by ID.
 
+        Retrieves the basic ticket data without comments or related users.
+        For full ticket data including comments, use get_enriched() instead.
+
         Args:
             ticket_id: The ticket's ID
 
         Returns:
             Ticket object
+
+        Example:
+            ticket = await client.tickets.get(12345)
+            print(f"Subject: {ticket.subject}")
+            print(f"Status: {ticket.status}")
         """
         response = await self._get(f"tickets/{ticket_id}.json")
         return Ticket(**response["ticket"])
 
     def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
-        """Get paginated list of tickets.
+        """Get paginated list of all tickets in the account.
+
+        Returns tickets sorted by creation date (newest first) by default.
+        Use async iteration to process tickets efficiently.
 
         Args:
             per_page: Number of tickets per page (max 100)
@@ -282,11 +349,25 @@ class TicketsClient(BaseClient):
 
         Returns:
             Paginator for iterating through all tickets
+
+        Example:
+            # Iterate through all tickets
+            async for ticket in client.tickets.list():
+                print(f"{ticket.id}: {ticket.subject}")
+
+            # Limit to first 50 tickets
+            async for ticket in client.tickets.list(limit=50):
+                print(ticket.subject)
+
+            # Collect to list
+            tickets = [t async for t in client.tickets.list(limit=100)]
         """
         return ZendeskPaginator.create_tickets_paginator(self._http, per_page=per_page, limit=limit)
 
     def for_user(self, user_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
         """Get paginated tickets requested by a specific user.
+
+        Retrieves all tickets where the specified user is the requester.
 
         Args:
             user_id: The user's ID
@@ -295,11 +376,22 @@ class TicketsClient(BaseClient):
 
         Returns:
             Paginator for iterating through user's tickets
+
+        Example:
+            # Get all tickets for a user
+            async for ticket in client.tickets.for_user(67890):
+                print(f"{ticket.id}: {ticket.subject}")
+
+            # Get first 10 tickets for a user
+            async for ticket in client.tickets.for_user(67890, limit=10):
+                print(ticket.subject)
         """
         return ZendeskPaginator.create_user_tickets_paginator(self._http, user_id, per_page=per_page, limit=limit)
 
     def for_organization(self, org_id: int, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
         """Get paginated tickets for a specific organization.
+
+        Retrieves all tickets associated with the specified organization.
 
         Args:
             org_id: The organization's ID
@@ -308,6 +400,15 @@ class TicketsClient(BaseClient):
 
         Returns:
             Paginator for iterating through organization's tickets
+
+        Example:
+            # Get all tickets for an organization
+            async for ticket in client.tickets.for_organization(98765):
+                print(f"{ticket.id}: {ticket.subject}")
+
+            # Get first 25 tickets for an organization
+            async for ticket in client.tickets.for_organization(98765, limit=25):
+                print(ticket.subject)
         """
         return ZendeskPaginator.create_organization_tickets_paginator(
             self._http, org_id, per_page=per_page, limit=limit
@@ -642,23 +743,59 @@ class TicketsClient(BaseClient):
 
             this_ticket_users = {uid: user for uid, user in ticket_users.items() if uid in ticket_user_ids}
             all_users = {**this_ticket_users, **comment_users}
-            enriched_tickets.append(EnrichedTicket(
-                ticket=ticket,
-                comments=comments,
-                users=all_users,
-                fields=fields or {},
-            ))
+            enriched_tickets.append(
+                EnrichedTicket(
+                    ticket=ticket,
+                    comments=comments,
+                    users=all_users,
+                    fields=fields or {},
+                )
+            )
 
         return enriched_tickets
 
     async def get_enriched(self, ticket_id: int) -> EnrichedTicket:
         """Get a ticket with all related data: comments, users, and field definitions.
 
+        Fetches the ticket along with all its comments, resolves all related users
+        (requester, assignee, submitter, collaborators, comment authors), and loads
+        ticket field definitions for interpreting custom fields.
+
+        This method makes multiple API calls in parallel for efficiency:
+        - Ticket with sideloaded users
+        - All ticket comments with their authors
+        - Ticket field definitions
+
         Args:
             ticket_id: The ticket's ID
 
         Returns:
-            EnrichedTicket object containing ticket, comments, users, and field definitions
+            EnrichedTicket object containing:
+                - ticket: The Ticket object
+                - comments: List of Comment objects
+                - users: Dict mapping user IDs to User objects
+                - fields: Dict mapping field IDs to TicketField definitions
+
+        Example:
+            enriched = await client.tickets.get_enriched(12345)
+
+            # Access the ticket
+            print(f"Subject: {enriched.ticket.subject}")
+
+            # Access resolved users via convenience properties
+            print(f"Requester: {enriched.requester.name}")
+            print(f"Assignee: {enriched.assignee.name if enriched.assignee else 'Unassigned'}")
+
+            # Access comments
+            for comment in enriched.comments:
+                author = enriched.users.get(comment.author_id)
+                print(f"{author.name}: {comment.body}")
+
+            # Access custom field definitions
+            for custom_field in enriched.ticket.custom_fields or []:
+                field_def = enriched.fields.get(custom_field.id)
+                if field_def:
+                    print(f"{field_def.title}: {custom_field.value}")
         """
         # Fetch ticket with users and fields in parallel
         ticket_task = self._get(f"tickets/{ticket_id}.json", params={"include": "users"})

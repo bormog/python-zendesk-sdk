@@ -143,10 +143,50 @@ users = await client.users.list(limit=50).collect()
 
 ### Users
 ```python
-user = await client.users.get(user_id)           # Get user by ID
-user = await client.users.by_email(email)        # Get user by email
-users = await client.users.get_many([id1, id2])  # Get multiple users
-paginator = client.users.list()                  # List users (paginator)
+# Read
+user = await client.users.get(user_id)           # Get user by ID (cached)
+user = await client.users.me()                   # Get current authenticated user
+user = await client.users.by_email(email)        # Find user by email (cached)
+users = await client.users.get_many([id1, id2])  # Get multiple users (batch)
+paginator = client.users.list()                  # List all users (paginator)
+
+# Create
+user = await client.users.create(
+    name="John Doe",
+    email="john@example.com",
+    role="end-user",                             # end-user, agent, admin
+    verified=True,                               # Skip email verification
+    organization_id=12345,
+    tags=["vip"],
+    user_fields={"department": "Sales"},
+)
+user = await client.users.create_or_update(      # Upsert by email/external_id
+    name="John Doe",
+    email="john@example.com",
+)
+
+# Update
+user = await client.users.update(
+    user_id,
+    phone="+1234567890",
+    tags=["premium"],
+    user_fields={"status": "active"},
+)
+
+# Delete
+await client.users.delete(user_id)               # Soft delete (recoverable 30 days)
+await client.users.permanently_delete(user_id)   # GDPR permanent deletion
+
+# Suspension
+user = await client.users.suspend(user_id)       # Block user access
+user = await client.users.unsuspend(user_id)     # Restore user access
+
+# Password (requires admin setting enabled)
+await client.users.set_password(user_id, "NewPass123!")
+reqs = await client.users.get_password_requirements(user_id)
+
+# Merge duplicates
+user = await client.users.merge(source_id, target_id)  # Merge into target
 ```
 
 ### Organizations
@@ -567,6 +607,7 @@ client.users.get.cache_invalidate(user_id)
 
 See the `examples/` directory for complete usage examples:
 - `basic_usage.py` - Basic configuration and API operations
+- `users.py` - Users CRUD (create, update, delete, suspend, passwords)
 - `search.py` - Type-safe search with SearchQueryConfig
 - `pagination_example.py` - Working with paginated results
 - `error_handling.py` - Error handling patterns

@@ -1,6 +1,6 @@
 [project]
 name = "python-zendesk-sdk"
-version = "0.6.0"
+version = "0.7.0"
 description = "Modern Python SDK for Zendesk API"
 authors = [
     {name = "bormog"}

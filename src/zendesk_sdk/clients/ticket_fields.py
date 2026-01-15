@@ -45,9 +45,7 @@ class TicketFieldsClient(BaseClient):
         else:
             maxsize = 200
             ttl = 1800
-        self.get: Callable[[int], TicketField] = self._create_cached_method(
-            self._get_impl, maxsize=maxsize, ttl=ttl
-        )
+        self.get: Callable[[int], TicketField] = self._create_cached_method(self._get_impl, maxsize=maxsize, ttl=ttl)
 
     async def _get_impl(self, field_id: int) -> TicketField:
         """Get a specific ticket field by ID.

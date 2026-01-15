@@ -90,6 +90,25 @@ class User(ZendeskModel):
         return f"{self.name}{email}{role}"
 
 
+class PasswordRequirements(ZendeskModel):
+    """Password requirements for a user.
+
+    Zendesk returns requirements as human-readable strings.
+    Use the `rules` property to get the list of requirement descriptions.
+    """
+
+    requirements: List[str] = Field(..., description="List of password requirement descriptions")
+
+    @property
+    def rules(self) -> List[str]:
+        """Get password requirements as list of strings."""
+        return self.requirements
+
+    def __str__(self) -> str:
+        """Human-readable representation."""
+        return "; ".join(self.requirements)
+
+
 class UserField(ZendeskModel):
     """Zendesk User Field model."""
 
