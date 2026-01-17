@@ -9,6 +9,7 @@ from .http_client import HTTPClient
 if TYPE_CHECKING:
     from .clients import (
         AttachmentsClient,
+        GroupsClient,
         HelpCenterClient,
         OrganizationsClient,
         SearchClient,
@@ -99,6 +100,35 @@ class ZendeskClient:
         from .clients import OrganizationsClient
 
         return OrganizationsClient(self.http_client, self.config.cache)
+
+    @cached_property
+    def groups(self) -> "GroupsClient":
+        """Access Groups API.
+
+        Example:
+            group = await client.groups.get(12345)
+            async for group in client.groups.list():
+                print(group.name)
+
+            # Create a new group
+            group = await client.groups.create("Support Team", description="Main support")
+
+            # Update a group
+            group = await client.groups.update(12345, description="Updated")
+
+            # Delete a group
+            await client.groups.delete(12345)
+
+            # Count groups
+            count = await client.groups.count()
+
+            # List assignable groups
+            async for group in client.groups.list_assignable():
+                print(group.name)
+        """
+        from .clients import GroupsClient
+
+        return GroupsClient(self.http_client, self.config.cache)
 
     @cached_property
     def tickets(self) -> "TicketsClient":

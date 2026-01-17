@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar
 
 from .exceptions import ZendeskPaginationException
-from .models import Article, Category, Comment, Organization, Section, Ticket, TicketField, User
+from .models import Article, Category, Comment, Group, Organization, Section, Ticket, TicketField, User
 
 logger = logging.getLogger(__name__)
 
@@ -532,6 +532,30 @@ class ZendeskPaginator:
                 return [Organization(**o) for o in response.get("organizations", [])]
 
         return OrganizationsPaginator(http_client, "organizations.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_groups_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Group]:
+        """Create paginator for groups endpoint."""
+
+        class GroupsPaginator(OffsetPaginator[Group]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Group]:
+                return [Group(**g) for g in response.get("groups", [])]
+
+        return GroupsPaginator(http_client, "groups.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_assignable_groups_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Group]:
+        """Create paginator for assignable groups endpoint."""
+
+        class AssignableGroupsPaginator(OffsetPaginator[Group]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Group]:
+                return [Group(**g) for g in response.get("groups", [])]
+
+        return AssignableGroupsPaginator(http_client, "groups/assignable.json", per_page=per_page, limit=limit)
 
     @staticmethod
     def create_ticket_fields_paginator(

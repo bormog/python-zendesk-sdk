@@ -23,6 +23,10 @@ class CacheConfig(BaseModel):
     org_ttl: int = Field(default=600, description="Organization cache TTL in seconds (default: 10 min)", ge=0)
     org_maxsize: int = Field(default=500, description="Max cached organizations", ge=1)
 
+    # Groups cache
+    group_ttl: int = Field(default=600, description="Group cache TTL in seconds (default: 10 min)", ge=0)
+    group_maxsize: int = Field(default=500, description="Max cached groups", ge=1)
+
     # Help Center cache
     article_ttl: int = Field(default=900, description="Article cache TTL in seconds (default: 15 min)", ge=0)
     article_maxsize: int = Field(default=500, description="Max cached articles", ge=1)

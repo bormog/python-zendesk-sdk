@@ -1,6 +1,7 @@
 """Zendesk API clients."""
 
 from .attachments import AttachmentsClient
+from .groups import GroupsClient
 from .help_center import ArticlesClient, CategoriesClient, HelpCenterClient, SectionsClient
 from .organizations import OrganizationsClient
 from .search import SearchClient
@@ -11,6 +12,7 @@ from .users import UsersClient
 __all__ = [
     # Main clients
     "UsersClient",
+    "GroupsClient",
     "OrganizationsClient",
     "TicketsClient",
     "TicketFieldsClient",

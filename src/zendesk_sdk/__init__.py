@@ -5,7 +5,7 @@ This package provides a clean, async-first interface to the Zendesk API
 with full type safety and comprehensive error handling.
 """
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 from .client import ZendeskClient
 from .clients import (
@@ -13,6 +13,7 @@ from .clients import (
     AttachmentsClient,
     CategoriesClient,
     CommentsClient,
+    GroupsClient,
     HelpCenterClient,
     OrganizationsClient,
     SearchClient,
@@ -36,6 +37,7 @@ from .models import (
     Article,
     Category,
     EnrichedTicket,
+    Group,
     PasswordRequirements,
     SearchQueryConfig,
     SearchType,
@@ -59,6 +61,7 @@ __all__ = [
     "CacheConfig",
     # Resource clients
     "UsersClient",
+    "GroupsClient",
     "OrganizationsClient",
     "TicketsClient",
     "TicketFieldsClient",
@@ -72,6 +75,7 @@ __all__ = [
     "SectionsClient",
     "ArticlesClient",
     # Models
+    "Group",
     "EnrichedTicket",
     "TicketField",
     "Category",

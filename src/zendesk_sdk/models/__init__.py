@@ -3,6 +3,7 @@
 from .base import ZendeskModel
 from .comment import Comment, CommentAttachment, CommentMetadata, CommentVia
 from .enriched_ticket import EnrichedTicket
+from .group import Group
 from .help_center import Article, Category, Section
 from .organization import Organization, OrganizationField, OrganizationSubscription
 from .search import (
@@ -40,6 +41,8 @@ __all__ = [
     "UserIdentity",
     "UserPhoto",
     "PasswordRequirements",
+    # Group models
+    "Group",
     # Organization models
     "Organization",
     "OrganizationField",

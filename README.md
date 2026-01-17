@@ -20,6 +20,7 @@ Modern Python SDK for Zendesk API, designed for automation and AI agents.
 - [API Methods](#api-methods)
   - [Users](#users)
   - [Organizations](#organizations)
+  - [Groups](#groups)
   - [Tickets](#tickets)
   - [Comments](#comments-nested-under-tickets)
   - [Tags](#tags-nested-under-tickets)
@@ -193,6 +194,33 @@ user = await client.users.merge(source_id, target_id)  # Merge into target
 ```python
 org = await client.organizations.get(org_id)     # Get organization by ID
 paginator = client.organizations.list()          # List organizations (paginator)
+```
+
+### Groups
+```python
+# Read
+group = await client.groups.get(group_id)        # Get group by ID (cached)
+count = await client.groups.count()              # Get total number of groups
+paginator = client.groups.list()                 # List all groups (paginator)
+paginator = client.groups.list_assignable()      # List assignable groups (paginator)
+
+# Create
+group = await client.groups.create(
+    name="Support Team",
+    description="First-line support agents",
+    is_public=True,
+)
+
+# Update
+group = await client.groups.update(
+    group_id,
+    name="Renamed Team",
+    description="Updated description",
+    is_public=False,
+)
+
+# Delete (soft delete)
+await client.groups.delete(group_id)
 ```
 
 ### Tickets
@@ -554,6 +582,7 @@ The SDK includes built-in caching for frequently accessed resources. Caching is 
 |----------|-----|----------|
 | Users | 5 min | 1000 |
 | Organizations | 10 min | 500 |
+| Groups | 10 min | 500 |
 | Ticket Fields | 30 min | 200 |
 | Articles | 15 min | 500 |
 | Categories | 30 min | 200 |
@@ -608,6 +637,7 @@ client.users.get.cache_invalidate(user_id)
 See the `examples/` directory for complete usage examples:
 - `basic_usage.py` - Basic configuration and API operations
 - `users.py` - Users CRUD (create, update, delete, suspend, passwords)
+- `groups.py` - Groups CRUD (create, update, delete, list)
 - `search.py` - Type-safe search with SearchQueryConfig
 - `pagination_example.py` - Working with paginated results
 - `error_handling.py` - Error handling patterns
