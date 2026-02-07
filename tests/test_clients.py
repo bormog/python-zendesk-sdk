@@ -515,6 +515,162 @@ class TestOrganizationsClient:
             assert result.name == "Test Org"
             mock_get.assert_called_once_with("organizations/456.json")
 
+    @pytest.mark.asyncio
+    async def test_create_minimal(self):
+        """Test create organization with minimal parameters."""
+        client = self.get_client()
+        org_data = {
+            "organization": {
+                "id": 456,
+                "name": "New Org",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = org_data
+
+            result = await client.create(name="New Org")
+
+            assert isinstance(result, Organization)
+            assert result.id == 456
+            mock_post.assert_called_once_with(
+                "organizations.json",
+                json={"organization": {"name": "New Org"}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_create_full(self):
+        """Test create organization with all parameters."""
+        client = self.get_client()
+        org_data = {
+            "organization": {
+                "id": 456,
+                "name": "Acme Corp",
+                "domain_names": ["acme.com"],
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = org_data
+
+            result = await client.create(
+                name="Acme Corp",
+                details="123 Main St",
+                notes="VIP customer",
+                external_id="EXT-456",
+                domain_names=["acme.com"],
+                tags=["enterprise"],
+                group_id=99,
+                shared_tickets=True,
+                shared_comments=False,
+                organization_fields={"plan": "premium"},
+            )
+
+            assert isinstance(result, Organization)
+            payload = mock_post.call_args[1]["json"]["organization"]
+            assert payload["name"] == "Acme Corp"
+            assert payload["details"] == "123 Main St"
+            assert payload["notes"] == "VIP customer"
+            assert payload["external_id"] == "EXT-456"
+            assert payload["domain_names"] == ["acme.com"]
+            assert payload["tags"] == ["enterprise"]
+            assert payload["group_id"] == 99
+            assert payload["shared_tickets"] is True
+            assert payload["shared_comments"] is False
+            assert payload["organization_fields"] == {"plan": "premium"}
+
+    @pytest.mark.asyncio
+    async def test_create_or_update(self):
+        """Test create or update organization."""
+        client = self.get_client()
+        org_data = {
+            "organization": {
+                "id": 456,
+                "name": "Upserted Org",
+                "external_id": "EXT-456",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = org_data
+
+            result = await client.create_or_update(
+                name="Upserted Org",
+                external_id="EXT-456",
+            )
+
+            assert isinstance(result, Organization)
+            mock_post.assert_called_once()
+            assert "organizations/create_or_update.json" in mock_post.call_args[0]
+
+    @pytest.mark.asyncio
+    async def test_update(self):
+        """Test update organization."""
+        client = self.get_client()
+        org_data = {
+            "organization": {
+                "id": 456,
+                "name": "Test Org",
+                "tags": ["updated"],
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = org_data
+
+            result = await client.update(456, tags=["updated"])
+
+            assert isinstance(result, Organization)
+            mock_put.assert_called_once_with(
+                "organizations/456.json",
+                json={"organization": {"tags": ["updated"]}},
+            )
+
+    @pytest.mark.asyncio
+    async def test_update_multiple_fields(self):
+        """Test update organization with multiple fields."""
+        client = self.get_client()
+        org_data = {
+            "organization": {
+                "id": 456,
+                "name": "Acme Corporation",
+                "created_at": "2023-01-01T00:00:00Z",
+            }
+        }
+
+        with patch.object(client, "_put", new_callable=AsyncMock) as mock_put:
+            mock_put.return_value = org_data
+
+            result = await client.update(
+                456,
+                name="Acme Corporation",
+                domain_names=["acme.com", "acme.io"],
+                organization_fields={"plan": "enterprise"},
+            )
+
+            assert isinstance(result, Organization)
+            payload = mock_put.call_args[1]["json"]["organization"]
+            assert payload["name"] == "Acme Corporation"
+            assert payload["domain_names"] == ["acme.com", "acme.io"]
+            assert payload["organization_fields"] == {"plan": "enterprise"}
+
+    @pytest.mark.asyncio
+    async def test_delete(self):
+        """Test delete organization."""
+        client = self.get_client()
+
+        with patch.object(client, "_delete", new_callable=AsyncMock) as mock_delete:
+            mock_delete.return_value = None
+
+            result = await client.delete(456)
+
+            assert result is True
+            mock_delete.assert_called_once_with("organizations/456.json")
+
 
 class TestTicketsClient:
     """Test cases for TicketsClient."""

@@ -95,6 +95,23 @@ class ZendeskClient:
         Example:
             org = await client.organizations.get(12345)
             paginator = await client.organizations.list()
+
+            # Create an organization
+            org = await client.organizations.create(
+                name="Acme Corp", domain_names=["acme.com"]
+            )
+
+            # Update an organization
+            org = await client.organizations.update(12345, tags=["vip"])
+
+            # Upsert by external_id
+            org = await client.organizations.create_or_update(
+                name="Acme Corp", external_id="acme-123"
+            )
+
+            # Delete an organization
+            await client.organizations.delete(12345)
+
             # For search use client.search.organizations()
         """
         from .clients import OrganizationsClient

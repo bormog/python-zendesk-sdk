@@ -192,8 +192,32 @@ user = await client.users.merge(source_id, target_id)  # Merge into target
 
 ### Organizations
 ```python
-org = await client.organizations.get(org_id)     # Get organization by ID
+# Read
+org = await client.organizations.get(org_id)     # Get organization by ID (cached)
 paginator = client.organizations.list()          # List organizations (paginator)
+
+# Create
+org = await client.organizations.create(
+    name="Acme Corp",
+    domain_names=["acme.com"],
+    tags=["enterprise"],
+    organization_fields={"plan": "premium"},
+)
+org = await client.organizations.create_or_update(  # Upsert by external_id
+    name="Acme Corp",
+    external_id="acme-123",
+)
+
+# Update
+org = await client.organizations.update(
+    org_id,
+    name="Acme Corporation",
+    tags=["enterprise", "vip"],
+    organization_fields={"plan": "enterprise"},
+)
+
+# Delete
+await client.organizations.delete(org_id)
 ```
 
 ### Groups
@@ -451,7 +475,7 @@ Access Help Center (Guide) via `client.help_center` namespace:
 ```python
 cat = await client.help_center.categories.get(category_id)
 paginator = client.help_center.categories.list()              # Paginator
-cat = await client.help_center.categories.create(name, description)
+cat = await client.help_center.categories.create(name, description=description)
 cat = await client.help_center.categories.update(category_id, name=new_name)
 await client.help_center.categories.delete(category_id, force=True)
 ```
@@ -461,7 +485,7 @@ await client.help_center.categories.delete(category_id, force=True)
 sec = await client.help_center.sections.get(section_id)
 paginator = client.help_center.sections.list()                # Paginator
 paginator = client.help_center.sections.for_category(category_id)
-sec = await client.help_center.sections.create(category_id, name, description)
+sec = await client.help_center.sections.create(category_id, name, description=description)
 sec = await client.help_center.sections.update(section_id, name=new_name)
 await client.help_center.sections.delete(section_id, force=True)
 ```
@@ -637,6 +661,7 @@ client.users.get.cache_invalidate(user_id)
 See the `examples/` directory for complete usage examples:
 - `basic_usage.py` - Basic configuration and API operations
 - `users.py` - Users CRUD (create, update, delete, suspend, passwords)
+- `organizations.py` - Organizations CRUD (create, update, delete, upsert)
 - `groups.py` - Groups CRUD (create, update, delete, list)
 - `search.py` - Type-safe search with SearchQueryConfig
 - `pagination_example.py` - Working with paginated results
