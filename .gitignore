@@ -186,6 +186,7 @@ Thumbs.db
 
 # Debug files
 debug.py
+debug_*.py
 
 # Local directories
 .claude/

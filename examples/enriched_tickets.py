@@ -60,6 +60,15 @@ async def main() -> None:
         if field:
             print(f"Field type: {field.type}, Required: {field.required}")
 
+        # ==================== Last comment shortcut ====================
+
+        # Get just the last comment with its author (single API call)
+        result = await client.tickets.comments.get_last(12345)
+        if result:
+            comment, author = result
+            author_name = author.name if author else "Unknown"
+            print(f"\nLast comment by {author_name}: {comment.body[:80]}")
+
         # ==================== Comments with authors ====================
 
         # Process comments with author information

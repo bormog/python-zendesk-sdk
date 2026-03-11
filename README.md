@@ -280,9 +280,16 @@ await client.tickets.delete(ticket_id)
 ### Comments (nested under tickets)
 ```python
 paginator = client.tickets.comments.list(ticket_id)    # List comments (paginator)
+result = await client.tickets.comments.get_last(ticket_id)  # Last comment + author
 ticket = await client.tickets.comments.add(ticket_id, body, public=False)
 await client.tickets.comments.make_private(ticket_id, comment_id)
 comment = await client.tickets.comments.redact(ticket_id, comment_id, text)
+
+# Get last comment with author (single API call)
+result = await client.tickets.comments.get_last(ticket_id)
+if result:
+    comment, author = result
+    print(f"{author.name}: {comment.body}")
 ```
 
 ### Tags (nested under tickets)

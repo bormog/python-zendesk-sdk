@@ -61,6 +61,44 @@ class CommentsClient(BaseClient):
         """
         return ZendeskPaginator.create_ticket_comments_paginator(self._http, ticket_id, per_page=per_page, limit=limit)
 
+    async def get_last(self, ticket_id: int) -> Optional[tuple[Comment, Optional[User]]]:
+        """Get the last comment for a ticket with its author.
+
+        Efficiently fetches only the most recent comment using sort_order=desc
+        and per_page=1, with sideloaded user data for the comment author.
+
+        Args:
+            ticket_id: The ticket's ID
+
+        Returns:
+            Tuple of (Comment, User or None) if comments exist, None if no comments
+
+        Example:
+            result = await client.tickets.comments.get_last(12345)
+            if result:
+                comment, author = result
+                print(f"{author.name}: {comment.body}")
+        """
+        response = await self._get(
+            f"tickets/{ticket_id}/comments.json",
+            params={"sort_order": "desc", "per_page": 1, "include": "users"},
+        )
+        comments = response.get("comments", [])
+        if not comments:
+            return None
+
+        comment = Comment(**comments[0])
+
+        author = None
+        if comment.author_id:
+            for user_data in response.get("users", []):
+                user = User(**user_data)
+                if user.id == comment.author_id:
+                    author = user
+                    break
+
+        return comment, author
+
     async def add(
         self,
         ticket_id: int,
