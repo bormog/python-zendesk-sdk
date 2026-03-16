@@ -375,6 +375,32 @@ class TicketsClient(BaseClient):
         response = await self._get(f"tickets/{ticket_id}.json")
         return Ticket(**response["ticket"])
 
+    async def get_many(self, ticket_ids: List[int]) -> Dict[int, Ticket]:
+        """Fetch multiple tickets by IDs.
+
+        Uses show_many endpoint for efficiency (max 100 IDs per request).
+
+        Args:
+            ticket_ids: List of ticket IDs to fetch
+
+        Returns:
+            Dictionary mapping ticket_id to Ticket object
+        """
+        if not ticket_ids:
+            return {}
+
+        unique_ids = list(set(ticket_ids))[:100]
+        ids_param = ",".join(str(tid) for tid in unique_ids)
+
+        response = await self._get(f"tickets/show_many.json?ids={ids_param}")
+
+        tickets: Dict[int, Ticket] = {}
+        for ticket_data in response.get("tickets", []):
+            ticket = Ticket(**ticket_data)
+            if ticket.id is not None:
+                tickets[ticket.id] = ticket
+        return tickets
+
     def list(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[Ticket]":
         """Get paginated list of all tickets in the account.
 
@@ -843,6 +869,35 @@ class TicketsClient(BaseClient):
         ticket = Ticket(**response["ticket"])
         ticket_users = self._extract_users_from_response(response)
         return await self._build_enriched_ticket(ticket, ticket_users, fields)
+
+    async def get_many_enriched(self, ticket_ids: List[int]) -> List[EnrichedTicket]:
+        """Get multiple tickets with all related data: comments, users, and field definitions.
+
+        Batch-loads tickets, users, and fields in parallel, then fetches comments
+        for each ticket. Much more efficient than calling get_enriched() in a loop.
+
+        Args:
+            ticket_ids: List of ticket IDs to fetch (max 100)
+
+        Returns:
+            List of EnrichedTicket objects
+        """
+        if not ticket_ids:
+            return []
+
+        # Fetch tickets and fields in parallel (independent calls)
+        tickets_dict, fields = await asyncio.gather(
+            self.get_many(ticket_ids),
+            self._fetch_fields(),
+        )
+        if not tickets_dict:
+            return []
+
+        tickets = list(tickets_dict.values())
+        user_ids = self._collect_user_ids_from_tickets(tickets)
+        ticket_users = await self._fetch_users_batch(user_ids)
+
+        return await self._build_enriched_tickets(tickets, ticket_users, fields)
 
     async def search_enriched(
         self,

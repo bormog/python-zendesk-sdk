@@ -13,7 +13,7 @@ from zendesk_sdk.clients import (
     TicketsClient,
     UsersClient,
 )
-from zendesk_sdk.models import Comment, Organization, Ticket, User
+from zendesk_sdk.models import Comment, EnrichedTicket, Organization, Ticket, User
 
 
 class TestUsersClient:
@@ -959,6 +959,98 @@ class TestTicketsClient:
 
             assert result is True
             mock_delete.assert_called_once_with("tickets/12345.json")
+
+    @pytest.mark.asyncio
+    async def test_get_many(self):
+        """Test batch get tickets by IDs."""
+        client = self.get_client()
+        response_data = {
+            "tickets": [
+                {"id": 1, "subject": "Ticket 1", "status": "open", "created_at": "2023-01-01T00:00:00Z"},
+                {"id": 2, "subject": "Ticket 2", "status": "pending", "created_at": "2023-01-02T00:00:00Z"},
+                {"id": 3, "subject": "Ticket 3", "status": "solved", "created_at": "2023-01-03T00:00:00Z"},
+            ]
+        }
+
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = response_data
+
+            result = await client.get_many([1, 2, 3])
+
+            assert len(result) == 3
+            assert isinstance(result[1], Ticket)
+            assert result[1].subject == "Ticket 1"
+            assert result[2].subject == "Ticket 2"
+            assert result[3].subject == "Ticket 3"
+            mock_get.assert_called_once()
+            call_url = mock_get.call_args[0][0]
+            assert call_url.startswith("tickets/show_many.json?ids=")
+
+    @pytest.mark.asyncio
+    async def test_get_many_empty(self):
+        """Test batch get tickets with empty list."""
+        client = self.get_client()
+
+        result = await client.get_many([])
+
+        assert result == {}
+
+    @pytest.mark.asyncio
+    async def test_get_many_deduplicates(self):
+        """Test batch get tickets deduplicates IDs."""
+        client = self.get_client()
+        response_data = {
+            "tickets": [
+                {"id": 1, "subject": "Ticket 1", "status": "open", "created_at": "2023-01-01T00:00:00Z"},
+            ]
+        }
+
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = response_data
+
+            result = await client.get_many([1, 1, 1])
+
+            assert len(result) == 1
+            call_url = mock_get.call_args[0][0]
+            assert "ids=1" in call_url
+
+    @pytest.mark.asyncio
+    async def test_get_many_enriched(self):
+        """Test batch get enriched tickets."""
+        client = self.get_client()
+
+        tickets_dict = {
+            1: Ticket(id=1, subject="T1", status="open", requester_id=100, created_at="2023-01-01T00:00:00Z"),
+            2: Ticket(id=2, subject="T2", status="open", requester_id=200, created_at="2023-01-02T00:00:00Z"),
+        }
+        mock_users = {100: User(id=100, name="User A"), 200: User(id=200, name="User B")}
+        mock_enriched = [
+            EnrichedTicket(ticket=tickets_dict[1], comments=[], users={100: mock_users[100]}, fields={}),
+            EnrichedTicket(ticket=tickets_dict[2], comments=[], users={200: mock_users[200]}, fields={}),
+        ]
+
+        with (
+            patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict) as mock_get_many,
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value=mock_users),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_build_enriched_tickets", new_callable=AsyncMock, return_value=mock_enriched),
+        ):
+            result = await client.get_many_enriched([1, 2])
+
+            assert len(result) == 2
+            assert isinstance(result[0], EnrichedTicket)
+            assert result[0].ticket.id == 1
+            assert result[1].ticket.id == 2
+            mock_get_many.assert_called_once_with([1, 2])
+
+    @pytest.mark.asyncio
+    async def test_get_many_enriched_empty(self):
+        """Test batch get enriched tickets with empty list."""
+        client = self.get_client()
+
+        result = await client.get_many_enriched([])
+
+        assert result == []
 
 
 class TestCommentsClient:

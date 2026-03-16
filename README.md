@@ -251,6 +251,7 @@ await client.groups.delete(group_id)
 ```python
 # Read
 ticket = await client.tickets.get(ticket_id)           # Get ticket by ID
+tickets = await client.tickets.get_many([id1, id2])    # Get multiple tickets (batch)
 paginator = client.tickets.list()                      # List tickets (paginator)
 paginator = client.tickets.for_user(user_id)           # User's tickets (paginator)
 paginator = client.tickets.for_organization(org_id)    # Org's tickets (paginator)
@@ -320,8 +321,11 @@ Load tickets with all related data (comments, users, field definitions) in minim
 ```python
 from zendesk_sdk import SearchQueryConfig
 
-# Get ticket with all related data
+# Get single ticket with all related data
 enriched = await client.tickets.get_enriched(12345)
+
+# Batch: get multiple enriched tickets (much faster than calling get_enriched in a loop)
+enriched_list = await client.tickets.get_many_enriched([12345, 12346, 12347])
 
 print(f"Ticket: {enriched.ticket.subject}")
 print(f"Requester: {enriched.requester.name}")
