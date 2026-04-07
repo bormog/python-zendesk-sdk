@@ -6,6 +6,7 @@ This example demonstrates:
 - Updating groups
 - Deleting groups
 - Listing assignable groups
+- Group memberships (list members of a group)
 """
 
 import asyncio
@@ -96,6 +97,25 @@ async def main() -> None:
         # Also delete the detailed group
         await client.groups.delete(detailed_group.id)
         print(f"Deleted group: {detailed_group.id}")
+
+        # ==================== Membership Operations ====================
+
+        print("\n=== Membership Operations ===")
+
+        # List all memberships across all groups
+        print("All memberships:")
+        async for membership in client.groups.list_memberships(limit=10):
+            print(f"  User {membership.user_id} -> Group {membership.group_id} (default={membership.default})")
+
+        # List members of a specific group
+        print("\nMembers of first group:")
+        first_group = groups[0] if groups else None
+        if first_group:
+            members = await client.groups.list_group_members(first_group.id).collect()
+            for m in members:
+                user = await client.users.get(m.user_id)
+                default_str = " [DEFAULT]" if m.default else ""
+                print(f"  {user.name}{default_str}")
 
         # ==================== Caching Example ====================
 

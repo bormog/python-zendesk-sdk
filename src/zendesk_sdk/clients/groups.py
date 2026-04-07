@@ -2,7 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
 
-from ..models import Group
+from ..models import Group, GroupMembership
 from ..pagination import ZendeskPaginator
 from .base import BaseClient
 
@@ -300,3 +300,68 @@ class GroupsClient(BaseClient):
         """
         await self._delete(f"groups/{group_id}.json")
         return True
+
+    # ==================== Membership Operations ====================
+
+    def list_memberships(self, per_page: int = 100, limit: Optional[int] = None) -> "Paginator[GroupMembership]":
+        """Get paginated list of all group memberships.
+
+        Returns all group membership records across the entire account.
+
+        Args:
+            per_page: Number of memberships per API request (max 100).
+            limit: Maximum total memberships to return. None for no limit.
+
+        Returns:
+            Paginator[GroupMembership] for iterating through all memberships
+
+        Example:
+            async for membership in client.groups.list_memberships():
+                print(f"User {membership.user_id} in Group {membership.group_id}")
+        """
+        return ZendeskPaginator.create_group_memberships_paginator(self._http, per_page=per_page, limit=limit)
+
+    def list_group_members(
+        self, group_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> "Paginator[GroupMembership]":
+        """Get paginated list of memberships for a specific group.
+
+        Returns membership records for agents in the given group.
+        Use this to find out which agents belong to a group.
+
+        Args:
+            group_id: The group's ID
+            per_page: Number of memberships per API request (max 100).
+            limit: Maximum total memberships to return. None for no limit.
+
+        Returns:
+            Paginator[GroupMembership] for iterating through group's memberships
+
+        Example:
+            # List all agents in a group
+            async for membership in client.groups.list_group_members(12345):
+                print(f"Agent {membership.user_id}, default={membership.default}")
+
+            # Collect all members
+            members = await client.groups.list_group_members(12345).collect()
+            user_ids = [m.user_id for m in members]
+        """
+        return ZendeskPaginator.create_group_memberships_by_group_paginator(
+            self._http, group_id, per_page=per_page, limit=limit
+        )
+
+    async def get_membership(self, membership_id: int) -> GroupMembership:
+        """Get a specific group membership by ID.
+
+        Args:
+            membership_id: The membership's ID
+
+        Returns:
+            GroupMembership object
+
+        Example:
+            membership = await client.groups.get_membership(99999)
+            print(f"User {membership.user_id} in Group {membership.group_id}")
+        """
+        response = await self._get(f"group_memberships/{membership_id}.json")
+        return GroupMembership(**response["group_membership"])

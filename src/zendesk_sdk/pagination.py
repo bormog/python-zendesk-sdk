@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar
 
 from .exceptions import ZendeskPaginationException
-from .models import Article, Category, Comment, Group, Organization, Section, Ticket, TicketField, User
+from .models import Article, Category, Comment, Group, GroupMembership, Organization, Section, Ticket, TicketField, User
 
 logger = logging.getLogger(__name__)
 
@@ -556,6 +556,32 @@ class ZendeskPaginator:
                 return [Group(**g) for g in response.get("groups", [])]
 
         return AssignableGroupsPaginator(http_client, "groups/assignable.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_group_memberships_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[GroupMembership]:
+        """Create paginator for all group memberships endpoint."""
+
+        class GroupMembershipsPaginator(OffsetPaginator[GroupMembership]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[GroupMembership]:
+                return [GroupMembership(**m) for m in response.get("group_memberships", [])]
+
+        return GroupMembershipsPaginator(http_client, "group_memberships.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_group_memberships_by_group_paginator(
+        http_client: Any, group_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[GroupMembership]:
+        """Create paginator for memberships of a specific group."""
+
+        class GroupMembershipsByGroupPaginator(OffsetPaginator[GroupMembership]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[GroupMembership]:
+                return [GroupMembership(**m) for m in response.get("group_memberships", [])]
+
+        return GroupMembershipsByGroupPaginator(
+            http_client, f"groups/{group_id}/memberships.json", per_page=per_page, limit=limit
+        )
 
     @staticmethod
     def create_ticket_fields_paginator(

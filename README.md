@@ -228,6 +228,17 @@ count = await client.groups.count()              # Get total number of groups
 paginator = client.groups.list()                 # List all groups (paginator)
 paginator = client.groups.list_assignable()      # List assignable groups (paginator)
 
+# Memberships — find which agents belong to a group
+paginator = client.groups.list_memberships()              # All memberships (paginator)
+paginator = client.groups.list_group_members(group_id)    # Members of specific group (paginator)
+membership = await client.groups.get_membership(membership_id)  # Get specific membership
+
+# Example: get all agents in a group
+members = await client.groups.list_group_members(group_id).collect()
+for m in members:
+    user = await client.users.get(m.user_id)
+    print(f"  {user.name} (default={m.default})")
+
 # Create
 group = await client.groups.create(
     name="Support Team",
