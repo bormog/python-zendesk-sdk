@@ -30,6 +30,7 @@ Modern Python SDK for Zendesk API, designed for automation and AI agents.
   - [Search](#search)
   - [Help Center](#help-center)
 - [Error Handling](#error-handling)
+- [Proactive Rate Limiting](#proactive-rate-limiting)
 - [Caching](#caching)
 - [Examples](#examples)
 
@@ -64,6 +65,8 @@ Zendesk has a powerful REST API, but using it directly is painful:
 - **Caching**: TTL-based caching for users, organizations, and Help Center
 - **Help Center**: Full CRUD for Categories, Sections, and Articles
 - **Async HTTP**: Built on httpx with retry logic, rate limiting, exponential backoff
+- **Proactive Rate Limiting**: Monitors `X-Rate-Limit-Remaining` and throttles before hitting limits
+- **Authentication**: Token auth (Basic Auth) and OAuth (Bearer token)
 - **Configuration**: Environment variables or direct instantiation
 
 ## Installation
@@ -103,20 +106,33 @@ asyncio.run(main())
 
 ## Configuration
 
-### Direct instantiation
+### Token Authentication
 ```python
 config = ZendeskConfig(
     subdomain="mycompany",
     email="user@example.com",
-    token="api_token_here"
+    token="api_token_here",
+)
+```
+
+### OAuth Authentication
+```python
+config = ZendeskConfig(
+    subdomain="mycompany",
+    oauth_token="your_oauth_token",
 )
 ```
 
 ### Environment variables
 ```bash
+# Token auth
 export ZENDESK_SUBDOMAIN=mycompany
 export ZENDESK_EMAIL=user@example.com
 export ZENDESK_TOKEN=api_token_here
+
+# Or OAuth
+export ZENDESK_SUBDOMAIN=mycompany
+export ZENDESK_OAUTH_TOKEN=your_oauth_token
 ```
 
 ```python
@@ -617,6 +633,29 @@ config = ZendeskConfig(
     max_retries=3,     # Number of retry attempts
 )
 ```
+
+### Proactive Rate Limiting
+
+By default, the SDK reacts to rate limiting after hitting a 429 response. With proactive rate limiting, the SDK reads the `X-Rate-Limit-Remaining` header from every response and starts throttling **before** hitting the limit:
+
+```python
+config = ZendeskConfig(
+    subdomain="mycompany",
+    email="user@example.com",
+    token="api_token",
+    proactive_ratelimit=50,                     # Start throttling when < 50 requests remaining
+    proactive_ratelimit_request_interval=10,    # Wait 10s between requests when throttling
+)
+```
+
+When `X-Rate-Limit-Remaining` drops below the threshold, the SDK pauses between requests to let the quota recover. Once remaining goes back above the threshold, requests resume at full speed.
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `proactive_ratelimit` | None (disabled) | Threshold to start throttling |
+| `proactive_ratelimit_request_interval` | 10 | Seconds to wait between requests when throttling |
+
+Zendesk typically allows 400 requests per minute. A threshold of 40-60 provides a good safety margin.
 
 ## Caching
 
