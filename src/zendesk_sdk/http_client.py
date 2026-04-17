@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+from time import monotonic
 from typing import Any, Dict, Optional
 from urllib.parse import urljoin
 
@@ -31,6 +32,10 @@ class HTTPClient:
         self._client: Optional[httpx.AsyncClient] = None
         self._closed = False
 
+        # Proactive rate limit tracking
+        self._last_call_time: Optional[float] = None
+        self._last_limit_remaining: Optional[int] = None
+
     @property
     def client(self) -> httpx.AsyncClient:
         """Get or create httpx async client."""
@@ -40,13 +45,17 @@ class HTTPClient:
 
     def _create_client(self) -> httpx.AsyncClient:
         """Create configured httpx async client."""
-        auth = httpx.BasicAuth(username=self.config.auth_tuple[0], password=self.config.auth_tuple[1])
-
         headers = {
             "User-Agent": "python-zendesk-sdk/0.1.0",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+
+        auth: Optional[httpx.BasicAuth] = None
+        if self.config.auth_tuple:
+            auth = httpx.BasicAuth(username=self.config.auth_tuple[0], password=self.config.auth_tuple[1])
+        elif self.config.oauth_token:
+            headers["Authorization"] = f"Bearer {self.config.oauth_token}"
 
         return httpx.AsyncClient(
             auth=auth,
@@ -54,6 +63,40 @@ class HTTPClient:
             timeout=httpx.Timeout(self.config.timeout),
             limits=httpx.Limits(max_keepalive_connections=10, max_connections=20),
         )
+
+    async def _apply_proactive_ratelimit(self) -> None:
+        """Apply proactive rate limiting by sleeping if remaining requests are below threshold."""
+        if self.config.proactive_ratelimit is None:
+            return
+        if self._last_limit_remaining is None or self._last_call_time is None:
+            return
+
+        if self._last_limit_remaining >= self.config.proactive_ratelimit:  # type: ignore[operator]
+            return
+
+        time_since_last = monotonic() - self._last_call_time
+        interval = self.config.proactive_ratelimit_request_interval
+        if time_since_last >= interval:
+            return
+
+        remaining_sleep = interval - time_since_last
+        logger.warning(
+            f"Proactive rate limit: {self._last_limit_remaining} remaining "
+            f"(threshold: {self.config.proactive_ratelimit}), sleeping {remaining_sleep:.1f}s"
+        )
+        await asyncio.sleep(remaining_sleep)
+
+    def _update_rate_limit_state(self, response: httpx.Response) -> None:
+        """Update rate limit tracking state from response headers."""
+        if self.config.proactive_ratelimit is None:
+            return
+        self._last_call_time = monotonic()
+        remaining_header = response.headers.get("X-Rate-Limit-Remaining")
+        if remaining_header is not None:
+            try:
+                self._last_limit_remaining = int(remaining_header)
+            except (ValueError, TypeError):
+                pass
 
     async def _make_request_with_retry(
         self,
@@ -72,6 +115,9 @@ class HTTPClient:
 
         for attempt in range(max_retries + 1):
             try:
+                # Apply proactive rate limiting before request
+                await self._apply_proactive_ratelimit()
+
                 # Make the actual request
                 response = await self.client.request(
                     method=method,
@@ -79,6 +125,9 @@ class HTTPClient:
                     params=params,
                     json=json,
                 )
+
+                # Update rate limit tracking state
+                self._update_rate_limit_state(response)
 
                 # Handle different response types
                 retry_info = await self._handle_response(response, attempt, max_retries)

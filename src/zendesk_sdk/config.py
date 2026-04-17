@@ -1,9 +1,9 @@
 """Configuration management for Zendesk SDK."""
 
 import os
-from typing import Any
+from typing import Any, Optional
 
-from pydantic import BaseModel, Field, computed_field, field_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 
 class CacheConfig(BaseModel):
@@ -41,9 +41,11 @@ class CacheConfig(BaseModel):
 class ZendeskConfig(BaseModel):
     """Configuration for Zendesk API client.
 
-    This class handles authentication and connection settings for the Zendesk API.
-    It uses email/token authentication method.
-    Environment variables can be used for configuration.
+    Supports two authentication methods (mutually exclusive):
+    - Token auth: email + token (Basic Auth)
+    - OAuth: oauth_token (Bearer token)
+
+    Environment variables: ZENDESK_SUBDOMAIN, ZENDESK_EMAIL, ZENDESK_TOKEN, ZENDESK_OAUTH_TOKEN.
     """
 
     subdomain: str = Field(
@@ -51,15 +53,17 @@ class ZendeskConfig(BaseModel):
         description="Zendesk subdomain (e.g., 'mycompany' for mycompany.zendesk.com)",
         min_length=1,
     )
-    email: str = Field(
-        ...,
-        description="User email for authentication",
-        min_length=1,
+    email: Optional[str] = Field(
+        default=None,
+        description="User email for token authentication",
     )
-    token: str = Field(
-        ...,
-        description="API token for authentication",
-        min_length=1,
+    token: Optional[str] = Field(
+        default=None,
+        description="API token for token authentication",
+    )
+    oauth_token: Optional[str] = Field(
+        default=None,
+        description="OAuth token for Bearer authentication",
     )
     timeout: float = Field(
         default=30.0,
@@ -71,6 +75,16 @@ class ZendeskConfig(BaseModel):
         description="Maximum number of retry attempts",
         ge=0,
     )
+    proactive_ratelimit: Optional[int] = Field(
+        default=None,
+        description="Start sleeping when X-Rate-Limit-Remaining drops below this threshold",
+        ge=1,
+    )
+    proactive_ratelimit_request_interval: int = Field(
+        default=10,
+        description="Seconds to wait between requests when proactive rate limit threshold is reached",
+        ge=1,
+    )
     cache: CacheConfig = Field(
         default_factory=CacheConfig,
         description="Cache configuration",
@@ -80,20 +94,50 @@ class ZendeskConfig(BaseModel):
         # Load from environment variables if not provided
         if "subdomain" not in data:
             data["subdomain"] = os.getenv("ZENDESK_SUBDOMAIN", data.get("subdomain"))
-        if "email" not in data:
-            data["email"] = os.getenv("ZENDESK_EMAIL", data.get("email"))
-        if "token" not in data:
-            data["token"] = os.getenv("ZENDESK_TOKEN", data.get("token"))
+
+        # Only load env vars for one auth method — explicit args take precedence
+        has_explicit_token_auth = "email" in data or "token" in data
+        has_explicit_oauth = "oauth_token" in data
+
+        if not has_explicit_token_auth and not has_explicit_oauth:
+            # Nothing explicit — try env vars, token auth first
+            env_email = os.getenv("ZENDESK_EMAIL")
+            env_token = os.getenv("ZENDESK_TOKEN")
+            env_oauth = os.getenv("ZENDESK_OAUTH_TOKEN")
+            if env_email or env_token:
+                data.setdefault("email", env_email)
+                data.setdefault("token", env_token)
+            elif env_oauth:
+                data.setdefault("oauth_token", env_oauth)
+        elif has_explicit_token_auth and not has_explicit_oauth:
+            # Token auth explicit — fill missing from env
+            data.setdefault("email", os.getenv("ZENDESK_EMAIL"))
+            data.setdefault("token", os.getenv("ZENDESK_TOKEN"))
+        elif has_explicit_oauth and not has_explicit_token_auth:
+            # OAuth explicit — only fill oauth from env
+            data.setdefault("oauth_token", os.getenv("ZENDESK_OAUTH_TOKEN"))
 
         super().__init__(**data)
 
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v: str) -> str:
-        """Basic email validation."""
-        if "@" not in v:
-            raise ValueError("Invalid email format")
-        return v
+    @model_validator(mode="after")
+    def validate_auth(self) -> "ZendeskConfig":
+        """Validate that exactly one auth method is provided."""
+        has_token_auth = self.email is not None or self.token is not None
+        has_oauth = self.oauth_token is not None
+
+        if has_token_auth and has_oauth:
+            raise ValueError("Cannot use both token auth (email/token) and oauth_token simultaneously")
+
+        if not has_token_auth and not has_oauth:
+            raise ValueError("Either email/token or oauth_token must be provided")
+
+        if has_token_auth:
+            if not self.email or not self.token:
+                raise ValueError("Both email and token are required for token authentication")
+            if "@" not in self.email:
+                raise ValueError("Invalid email format")
+
+        return self
 
     @field_validator("subdomain")
     @classmethod
@@ -111,16 +155,21 @@ class ZendeskConfig(BaseModel):
 
     @computed_field  # type: ignore[prop-decorator]
     @property
-    def auth_tuple(self) -> tuple[str, str]:
-        """Generate authentication tuple for HTTP requests."""
-        return (f"{self.email}/token", self.token)
+    def auth_tuple(self) -> Optional[tuple[str, str]]:
+        """Generate authentication tuple for HTTP requests. None for OAuth mode."""
+        if self.email and self.token:
+            return f"{self.email}/token", self.token
+        return None
 
     def __repr__(self) -> str:
         """String representation without exposing credentials."""
-        return (
-            f"ZendeskConfig("
-            f"subdomain='{self.subdomain}', "
-            f"email='{self.email}', "
-            f"timeout={self.timeout}, "
-            f"max_retries={self.max_retries})"
-        )
+        auth_info = f"email='{self.email}'" if self.email else "oauth=True"
+        parts = [
+            f"subdomain='{self.subdomain}'",
+            auth_info,
+            f"timeout={self.timeout}",
+            f"max_retries={self.max_retries}",
+        ]
+        if self.proactive_ratelimit is not None:
+            parts.append(f"proactive_ratelimit={self.proactive_ratelimit}")
+        return f"ZendeskConfig({', '.join(parts)})"
