@@ -103,6 +103,10 @@ class Paginator(ABC, Generic[T]):
 
         # Collect all to list
         all_items = await paginator.collect()
+
+        # Total count without collecting all results
+        total = await paginator.count()          # Optional[int]
+        cached = paginator.total_count           # Optional[int], sync
     """
 
     def __init__(
@@ -162,6 +166,26 @@ class Paginator(ABC, Generic[T]):
     def pagination_info(self) -> Optional[PaginationInfo]:
         """Get current pagination information."""
         return self._pagination_info
+
+    @property
+    def total_count(self) -> Optional[int]:
+        """Total item count if known.
+
+        Returns the count from the most recent API response (available after
+        the first page fetch), or None if no page has been fetched yet, or if
+        the underlying endpoint does not expose a total count (e.g. cursor-based).
+        """
+        return self._pagination_info.count if self._pagination_info else None
+
+    async def count(self) -> Optional[int]:
+        """Fetch total item count without collecting all results.
+
+        Default implementation returns the cached total_count. Offset-based
+        paginators override this to issue a lightweight probe request when no
+        page has been fetched yet. Cursor-based paginators return None because
+        the Zendesk API does not expose a total for them.
+        """
+        return self.total_count
 
     async def __aiter__(self) -> AsyncIterator[T]:
         """Async iterator over all items across all pages."""
@@ -280,6 +304,23 @@ class OffsetPaginator(Paginator[T]):
     def _advance_to_next_page(self) -> None:
         """Move to next page."""
         self._current_page += 1
+
+    async def count(self) -> Optional[int]:
+        """Fetch total item count from the API.
+
+        If a page has already been fetched, returns the cached count.
+        Otherwise issues a lightweight probe request (per_page=1, page=1)
+        and reads the count from the response. The probe does not mutate
+        internal state, so subsequent iteration starts cleanly from page 1
+        with the original per_page.
+        """
+        if self._pagination_info and self._pagination_info.count is not None:
+            return self._pagination_info.count
+
+        probe_params = self.params.copy()
+        probe_params.update({"page": 1, "per_page": 1})
+        response = await self._fetch_page(probe_params)
+        return PaginationInfo.from_response(response).count
 
 
 class CursorPaginator(Paginator[T]):

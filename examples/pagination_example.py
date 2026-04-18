@@ -1,9 +1,10 @@
 """Pagination example for Zendesk SDK.
 
-This example demonstrates three ways to work with paginators:
+This example demonstrates four ways to work with paginators:
 1. Get specific page
 2. Iterate through all items
 3. Collect to list
+4. Ask for total count without collecting
 
 All list() and search() methods return Paginator objects.
 """
@@ -67,6 +68,23 @@ async def main() -> None:
 
         # Collect all (be careful with large datasets!)
         # all_users = await client.users.list().collect()
+
+        # ==================== Method 4: Total count only ====================
+
+        print("\n=== Method 4: Total count without collecting ===")
+
+        # count() issues a lightweight probe (per_page=1) when no page has been
+        # fetched yet; returns the cached count otherwise. Does not mutate state.
+        total_open = await client.search.tickets("status:open").count()
+        print(f"Open tickets in total: {total_open}")
+
+        # After iteration / get_page(), total_count is a free sync property.
+        paginator = client.users.list(per_page=100)
+        await paginator.get_page()
+        print(f"Users total_count (cached): {paginator.total_count}")
+
+        # Cursor-based paginators (incremental, search export) return None:
+        # the Zendesk API does not expose a total for them.
 
         # ==================== Pagination with search ====================
 

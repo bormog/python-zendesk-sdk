@@ -9,6 +9,7 @@ from zendesk_sdk.pagination import (
     CursorPaginator,
     OffsetPaginator,
     PaginationInfo,
+    SearchExportPaginator,
     ZendeskPaginator,
 )
 
@@ -496,3 +497,114 @@ class TestZendeskPaginator:
         response = {"tickets": [{"id": 1, "updated_at": "2023-01-01T00:00:00Z"}]}
         items = paginator._extract_items(response)
         assert items == [{"id": 1, "updated_at": "2023-01-01T00:00:00Z"}]
+
+
+class TestTotalCountAndCount:
+    """Tests for total_count property and async count() method."""
+
+    def test_total_count_before_fetch_returns_none(self):
+        """total_count is None before any page is fetched."""
+        http_client = Mock()
+        paginator = OffsetPaginator(http_client, "users.json")
+        assert paginator.total_count is None
+
+    @pytest.mark.asyncio
+    async def test_total_count_after_get_page(self):
+        """total_count returns count from API after first page fetch."""
+        http_client = AsyncMock()
+        paginator = OffsetPaginator(http_client, "users.json")
+        http_client.get.return_value = {"page": 1, "per_page": 100, "count": 250, "items": []}
+
+        await paginator.get_page()
+
+        assert paginator.total_count == 250
+
+    @pytest.mark.asyncio
+    async def test_count_uses_cache_if_available(self):
+        """count() returns cached count without a second request."""
+        http_client = AsyncMock()
+        paginator = OffsetPaginator(http_client, "users.json")
+        http_client.get.return_value = {"page": 1, "per_page": 100, "count": 250, "items": []}
+
+        await paginator.get_page()
+        assert http_client.get.call_count == 1
+
+        total = await paginator.count()
+
+        assert total == 250
+        assert http_client.get.call_count == 1  # no extra request
+
+    @pytest.mark.asyncio
+    async def test_count_fetches_probe_request(self):
+        """count() without prior fetch issues lightweight per_page=1 probe."""
+        http_client = AsyncMock()
+        paginator = OffsetPaginator(http_client, "users.json", params={"sort": "name"}, per_page=100)
+        http_client.get.return_value = {"page": 1, "per_page": 1, "count": 42, "items": [{"id": 1}]}
+
+        total = await paginator.count()
+
+        assert total == 42
+        http_client.get.assert_called_once_with("users.json", params={"sort": "name", "page": 1, "per_page": 1})
+
+    @pytest.mark.asyncio
+    async def test_count_does_not_mutate_state(self):
+        """Probe request from count() does not affect subsequent iteration."""
+        http_client = AsyncMock()
+        paginator = OffsetPaginator(http_client, "users.json", per_page=2)
+
+        probe_response = {"page": 1, "per_page": 1, "count": 3, "items": [{"id": 1}]}
+        iter_responses = [
+            {"page": 1, "per_page": 2, "count": 3, "items": [{"id": 1}, {"id": 2}]},
+            {"page": 2, "per_page": 2, "count": 3, "items": [{"id": 3}]},
+        ]
+        http_client.get.side_effect = [probe_response, *iter_responses]
+
+        total = await paginator.count()
+        assert total == 3
+
+        # state must be clean: current_page back to 1, no cached pagination_info
+        assert paginator._current_page == 1
+        assert paginator.pagination_info is None
+
+        items = []
+        async for item in paginator:
+            items.append(item)
+
+        assert items == [{"id": 1}, {"id": 2}, {"id": 3}]
+        # first call was probe with per_page=1, subsequent calls use per_page=2
+        assert http_client.get.call_args_list[0].kwargs["params"]["per_page"] == 1
+        assert http_client.get.call_args_list[1].kwargs["params"]["per_page"] == 2
+        assert http_client.get.call_args_list[1].kwargs["params"]["page"] == 1
+        assert http_client.get.call_args_list[2].kwargs["params"]["page"] == 2
+
+    @pytest.mark.asyncio
+    async def test_count_cursor_paginator_returns_none(self):
+        """Cursor-based paginators return None for count() without any request."""
+        http_client = AsyncMock()
+        paginator = CursorPaginator(http_client, "incremental/tickets.json")
+
+        total = await paginator.count()
+
+        assert total is None
+        http_client.get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_count_search_export_returns_none(self):
+        """SearchExportPaginator returns None for count() without any request."""
+        http_client = AsyncMock()
+        paginator = SearchExportPaginator(http_client, query="status:open", filter_type="ticket")
+
+        total = await paginator.count()
+
+        assert total is None
+        http_client.get.assert_not_called()
+
+    def test_total_count_cursor_paginator_is_none(self):
+        """total_count on cursor paginator is None before and stays None after fetch."""
+        http_client = Mock()
+        paginator = CursorPaginator(http_client, "incremental/tickets.json")
+        assert paginator.total_count is None
+
+        # simulate after-fetch state without count field
+        paginator._pagination_info = PaginationInfo(has_more=True)
+        assert paginator.total_count is None
