@@ -14,6 +14,7 @@ if TYPE_CHECKING:
         OrganizationsClient,
         SearchClient,
         TicketFieldsClient,
+        TicketMetricsClient,
         TicketsClient,
         UsersClient,
     )
@@ -203,6 +204,30 @@ class ZendeskClient:
         from .clients import TicketFieldsClient
 
         return TicketFieldsClient(self.http_client, self.config.cache)
+
+    @cached_property
+    def ticket_metrics(self) -> "TicketMetricsClient":
+        """Access Ticket Metrics API.
+
+        Read-only access to per-ticket metrics: first reply time, full
+        resolution time, agent/requester wait time, on-hold time, etc.
+        Time fields expose both calendar and business hours.
+
+        Example:
+            # Metrics for a specific ticket (primary use case)
+            metrics = await client.ticket_metrics.for_ticket(12345)
+            print(metrics.reply_time_in_minutes)  # {"calendar": 42, "business": 15}
+
+            # Metric by its own id
+            metrics = await client.ticket_metrics.get(999)
+
+            # Iterate over all metrics
+            async for m in client.ticket_metrics.list():
+                ...
+        """
+        from .clients import TicketMetricsClient
+
+        return TicketMetricsClient(self.http_client)
 
     @cached_property
     def attachments(self) -> "AttachmentsClient":

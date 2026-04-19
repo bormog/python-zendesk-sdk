@@ -5,7 +5,19 @@ from abc import ABC, abstractmethod
 from typing import Any, AsyncIterator, Dict, Generic, List, Optional, TypeVar
 
 from .exceptions import ZendeskPaginationException
-from .models import Article, Category, Comment, Group, GroupMembership, Organization, Section, Ticket, TicketField, User
+from .models import (
+    Article,
+    Category,
+    Comment,
+    Group,
+    GroupMembership,
+    Organization,
+    Section,
+    Ticket,
+    TicketField,
+    TicketMetrics,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -635,6 +647,18 @@ class ZendeskPaginator:
                 return [TicketField(**f) for f in response.get("ticket_fields", [])]
 
         return TicketFieldsPaginator(http_client, "ticket_fields.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_ticket_metrics_paginator(
+        http_client: Any, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[TicketMetrics]:
+        """Create paginator for ticket metrics endpoint."""
+
+        class TicketMetricsPaginator(OffsetPaginator[TicketMetrics]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[TicketMetrics]:
+                return [TicketMetrics(**m) for m in response.get("ticket_metrics", [])]
+
+        return TicketMetricsPaginator(http_client, "ticket_metrics.json", per_page=per_page, limit=limit)
 
     @staticmethod
     def create_search_paginator(

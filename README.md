@@ -25,6 +25,7 @@ Modern Python SDK for Zendesk API, designed for automation and AI agents.
   - [Comments](#comments-nested-under-tickets)
   - [Tags](#tags-nested-under-tickets)
   - [Ticket Fields](#ticket-fields)
+  - [Ticket Metrics](#ticket-metrics)
   - [Enriched Tickets](#enriched-tickets)
   - [Attachments](#attachments)
   - [Search](#search)
@@ -340,6 +341,32 @@ field = await client.ticket_fields.get(field_id)
 # Find field by title (case-insensitive)
 field = await client.ticket_fields.get_by_title("Subscription")
 ```
+
+### Ticket Metrics
+
+Read-only access to per-ticket metrics: first reply time, full resolution time,
+agent/requester wait time, on-hold time. Every time field exposes both calendar
+(wall-clock) and business (business-hours) values.
+
+```python
+# Metrics for a specific ticket — primary use case
+metrics = await client.ticket_metrics.for_ticket(ticket_id)
+print(metrics.reply_time_in_minutes)
+# {"calendar": 42, "business": 15}
+
+# Metric by its own id
+metrics = await client.ticket_metrics.get(metric_id)
+
+# Iterate over all metrics (offset pagination)
+async for m in client.ticket_metrics.list(per_page=100):
+    if m.full_resolution_time_in_minutes:
+        ...
+
+# Total count (single extra request, see Pagination)
+total = await client.ticket_metrics.list().count()
+```
+
+Metrics are live data — the client intentionally does not cache responses.
 
 ### Enriched Tickets
 
