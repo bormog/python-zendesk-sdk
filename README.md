@@ -158,6 +158,11 @@ async for user in client.users.list():
 
 # 3. Collect to list
 users = await client.users.list(limit=50).collect()
+
+# Get total count without iterating (uses Zendesk's count from response)
+paginator = client.users.list()
+total = await paginator.count()       # async; issues a probe request if needed
+cached = paginator.total_count        # sync; None until at least one page fetched
 ```
 
 ### Users
