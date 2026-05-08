@@ -32,6 +32,7 @@ from .ticket import (
     TicketVia,
 )
 from .user import PasswordRequirements, User, UserField, UserIdentity, UserPhoto
+from .view import View, ViewCount
 
 __all__ = [
     # Base
@@ -63,6 +64,9 @@ __all__ = [
     "CommentVia",
     # Enriched ticket model
     "EnrichedTicket",
+    # View models
+    "View",
+    "ViewCount",
     # Help Center models
     "Category",
     "Section",

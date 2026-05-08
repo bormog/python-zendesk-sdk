@@ -17,6 +17,7 @@ from .models import (
     TicketField,
     TicketMetrics,
     User,
+    View,
 )
 
 logger = logging.getLogger(__name__)
@@ -659,6 +660,41 @@ class ZendeskPaginator:
                 return [TicketMetrics(**m) for m in response.get("ticket_metrics", [])]
 
         return TicketMetricsPaginator(http_client, "ticket_metrics.json", per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_views_paginator(
+        http_client: Any,
+        per_page: int = 100,
+        limit: Optional[int] = None,
+        active_only: bool = False,
+    ) -> OffsetPaginator[View]:
+        """Create paginator for views endpoint.
+
+        Args:
+            http_client: HTTP client instance
+            per_page: Number of items per page
+            limit: Maximum number of items to return (None = no limit)
+            active_only: If True, list only active views (uses /views/active)
+        """
+
+        class ViewsPaginator(OffsetPaginator[View]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[View]:
+                return [View(**v) for v in response.get("views", [])]
+
+        path = "views/active.json" if active_only else "views.json"
+        return ViewsPaginator(http_client, path, per_page=per_page, limit=limit)
+
+    @staticmethod
+    def create_view_tickets_paginator(
+        http_client: Any, view_id: int, per_page: int = 100, limit: Optional[int] = None
+    ) -> OffsetPaginator[Ticket]:
+        """Create paginator for tickets-in-a-view endpoint."""
+
+        class ViewTicketsPaginator(OffsetPaginator[Ticket]):
+            def _extract_items(self, response: Dict[str, Any]) -> List[Ticket]:
+                return [Ticket(**t) for t in response.get("tickets", [])]
+
+        return ViewTicketsPaginator(http_client, f"views/{view_id}/tickets.json", per_page=per_page, limit=limit)
 
     @staticmethod
     def create_search_paginator(

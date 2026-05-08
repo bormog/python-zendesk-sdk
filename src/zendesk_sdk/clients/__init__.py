@@ -9,6 +9,7 @@ from .ticket_fields import TicketFieldsClient
 from .ticket_metrics import TicketMetricsClient
 from .tickets import CommentsClient, TagsClient, TicketsClient
 from .users import UsersClient
+from .views import ViewsClient
 
 __all__ = [
     # Main clients
@@ -20,6 +21,7 @@ __all__ = [
     "TicketMetricsClient",
     "AttachmentsClient",
     "SearchClient",
+    "ViewsClient",
     # Ticket sub-clients
     "CommentsClient",
     "TagsClient",

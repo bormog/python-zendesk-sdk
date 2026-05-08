@@ -37,6 +37,10 @@ class CacheConfig(BaseModel):
     section_ttl: int = Field(default=1800, description="Section cache TTL in seconds (default: 30 min)", ge=0)
     section_maxsize: int = Field(default=200, description="Max cached sections", ge=1)
 
+    # Views cache (definitions change rarely; counts are not cached)
+    view_ttl: int = Field(default=900, description="View cache TTL in seconds (default: 15 min)", ge=0)
+    view_maxsize: int = Field(default=200, description="Max cached views", ge=1)
+
 
 class ZendeskConfig(BaseModel):
     """Configuration for Zendesk API client.

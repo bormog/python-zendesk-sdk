@@ -23,6 +23,7 @@ from .clients import (
     TicketMetricsClient,
     TicketsClient,
     UsersClient,
+    ViewsClient,
 )
 from .config import CacheConfig, ZendeskConfig
 from .exceptions import (
@@ -55,6 +56,8 @@ from .models import (
     TicketType,
     TicketTypeInput,
     UserRole,
+    View,
+    ViewCount,
 )
 
 __all__ = [
@@ -73,6 +76,7 @@ __all__ = [
     "TagsClient",
     "AttachmentsClient",
     "SearchClient",
+    "ViewsClient",
     # Help Center
     "HelpCenterClient",
     "CategoriesClient",
@@ -87,6 +91,8 @@ __all__ = [
     "Category",
     "Section",
     "Article",
+    "View",
+    "ViewCount",
     # Search
     "SearchQueryConfig",
     "SearchType",

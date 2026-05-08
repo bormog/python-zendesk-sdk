@@ -29,6 +29,7 @@ Modern Python SDK for Zendesk API, designed for automation and AI agents.
   - [Enriched Tickets](#enriched-tickets)
   - [Attachments](#attachments)
   - [Search](#search)
+  - [Views](#views)
   - [Help Center](#help-center)
 - [Error Handling](#error-handling)
 - [Proactive Rate Limiting](#proactive-rate-limiting)
@@ -531,6 +532,48 @@ async for ticket in client.search.export_tickets("priority:high", limit=500):
 |--------|---------------|------------|------------|
 | `search.tickets()` | 1000 max | Offset | Possible |
 | `search.export_tickets()` | None | Cursor | None |
+
+### Views
+
+Views are saved searches over tickets — the day-to-day workspace of an
+agent. Read-only access through `client.views`: list views, fetch a
+view's tickets, count tickets without loading them. Useful for
+LLM-agents (skip query construction — use views the support team has
+already curated) and dashboards (counts in one request).
+
+```python
+# List views
+async for view in client.views.list():
+    print(f"{view.title} (active={view.active})")
+
+# Active views only
+active = await client.views.list(active_only=True).collect()
+
+# Get a single view (cached)
+view = await client.views.get(12345)
+print(view.conditions)  # raw {'all': [...], 'any': [...]}
+
+# Get many views in one request (max 100 IDs)
+views = await client.views.get_many([1, 2, 3])
+
+# Iterate tickets in a view
+async for ticket in client.views.tickets(12345):
+    print(f"#{ticket.id}: {ticket.subject}")
+
+# Count tickets without loading them
+count = await client.views.count(12345)
+print(f"{count.value} tickets (fresh={count.fresh})")
+
+# Counts for several views in one request (great for dashboards, max 20 IDs)
+counts = await client.views.count_many([1, 2, 3])
+for c in counts:
+    print(f"view {c.view_id}: {c.value}")
+```
+
+> **Read-only** by design. Views are owned by admins and rarely edited
+> via API. For very large views the count is served from a server-side
+> cache — check `ViewCount.fresh` to know if it's authoritative.
+
 
 ### Help Center
 

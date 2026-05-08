@@ -17,6 +17,7 @@ if TYPE_CHECKING:
         TicketMetricsClient,
         TicketsClient,
         UsersClient,
+        ViewsClient,
     )
 
 
@@ -258,6 +259,34 @@ class ZendeskClient:
         from .clients import SearchClient
 
         return SearchClient(self.http_client)
+
+    @cached_property
+    def views(self) -> "ViewsClient":
+        """Access Views API (read-only).
+
+        Views are saved searches over tickets — the way agents work
+        with tickets day-to-day. Read-only: list, get, tickets, count,
+        count_many.
+
+        Example:
+            # List all views
+            async for view in client.views.list():
+                print(f"{view.title} (active={view.active})")
+
+            # Get a specific view (cached)
+            view = await client.views.get(12345)
+
+            # Tickets in a view
+            async for ticket in client.views.tickets(12345):
+                print(ticket.subject)
+
+            # Counts without loading tickets
+            count = await client.views.count(12345)
+            counts = await client.views.count_many([1, 2, 3])
+        """
+        from .clients import ViewsClient
+
+        return ViewsClient(self.http_client, self.config.cache)
 
     @cached_property
     def help_center(self) -> "HelpCenterClient":
