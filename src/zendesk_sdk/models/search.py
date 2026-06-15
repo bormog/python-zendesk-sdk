@@ -132,69 +132,81 @@ class SearchQueryConfig(BaseModel):
 
     # === Common fields (all types) ===
     created_after: Optional[Union[date, datetime, str]] = Field(
-        None, description="Search items created after this date"
+        default=None, description="Search items created after this date"
     )
     created_before: Optional[Union[date, datetime, str]] = Field(
-        None, description="Search items created before this date"
+        default=None, description="Search items created before this date"
     )
     updated_after: Optional[Union[date, datetime, str]] = Field(
-        None, description="Search items updated after this date"
+        default=None, description="Search items updated after this date"
     )
     updated_before: Optional[Union[date, datetime, str]] = Field(
-        None, description="Search items updated before this date"
+        default=None, description="Search items updated before this date"
     )
-    tags: Optional[List[str]] = Field(None, description="Include items with these tags (OR logic)")
-    exclude_tags: Optional[List[str]] = Field(None, description="Exclude items with these tags")
+    tags: Optional[List[str]] = Field(default=None, description="Include items with these tags (OR logic)")
+    exclude_tags: Optional[List[str]] = Field(default=None, description="Exclude items with these tags")
 
     # === Ticket-specific fields ===
-    status: Optional[List[Union[TicketStatus, str]]] = Field(None, description="Ticket statuses to search (OR logic)")
-    priority: Optional[List[Union[TicketPriority, str]]] = Field(
-        None, description="Ticket priorities to search (OR logic)"
+    status: Optional[List[Union[TicketStatus, str]]] = Field(
+        default=None, description="Ticket statuses to search (OR logic)"
     )
-    ticket_type: Optional[List[Union[TicketType, str]]] = Field(None, description="Ticket types to search (OR logic)")
-    organization_id: Optional[int] = Field(None, description="Filter by organization ID")
+    priority: Optional[List[Union[TicketPriority, str]]] = Field(
+        default=None, description="Ticket priorities to search (OR logic)"
+    )
+    ticket_type: Optional[List[Union[TicketType, str]]] = Field(
+        default=None, description="Ticket types to search (OR logic)"
+    )
+    organization_id: Optional[int] = Field(default=None, description="Filter by organization ID")
     requester_id: Optional[Union[int, Literal["me", "none"]]] = Field(
-        None, description="Filter by requester ID, 'me', or 'none'"
+        default=None, description="Filter by requester ID, 'me', or 'none'"
     )
     assignee_id: Optional[Union[int, Literal["me", "none"]]] = Field(
-        None, description="Filter by assignee ID, 'me', or 'none'"
+        default=None, description="Filter by assignee ID, 'me', or 'none'"
     )
     submitter_id: Optional[Union[int, Literal["me", "none"]]] = Field(
-        None, description="Filter by submitter ID, 'me', or 'none'"
+        default=None, description="Filter by submitter ID, 'me', or 'none'"
     )
-    group_id: Optional[int] = Field(None, description="Filter by group ID")
-    brand_id: Optional[int] = Field(None, description="Filter by brand ID (Enterprise)")
-    via: Optional[List[Union[TicketChannel, str]]] = Field(None, description="Filter by channel (OR logic)")
-    subject: Optional[str] = Field(None, description="Search in ticket subject")
-    description: Optional[str] = Field(None, description="Search in ticket description/comments")
-    solved_after: Optional[Union[date, datetime, str]] = Field(None, description="Tickets solved after this date")
-    solved_before: Optional[Union[date, datetime, str]] = Field(None, description="Tickets solved before this date")
-    due_date_after: Optional[Union[date, datetime, str]] = Field(None, description="Task tickets due after this date")
-    due_date_before: Optional[Union[date, datetime, str]] = Field(None, description="Task tickets due before this date")
-    has_attachment: Optional[bool] = Field(None, description="Filter tickets with/without attachments")
+    group_id: Optional[int] = Field(default=None, description="Filter by group ID")
+    brand_id: Optional[int] = Field(default=None, description="Filter by brand ID (Enterprise)")
+    via: Optional[List[Union[TicketChannel, str]]] = Field(default=None, description="Filter by channel (OR logic)")
+    subject: Optional[str] = Field(default=None, description="Search in ticket subject")
+    description: Optional[str] = Field(default=None, description="Search in ticket description/comments")
+    solved_after: Optional[Union[date, datetime, str]] = Field(
+        default=None, description="Tickets solved after this date"
+    )
+    solved_before: Optional[Union[date, datetime, str]] = Field(
+        default=None, description="Tickets solved before this date"
+    )
+    due_date_after: Optional[Union[date, datetime, str]] = Field(
+        default=None, description="Task tickets due after this date"
+    )
+    due_date_before: Optional[Union[date, datetime, str]] = Field(
+        default=None, description="Task tickets due before this date"
+    )
+    has_attachment: Optional[bool] = Field(default=None, description="Filter tickets with/without attachments")
     custom_fields: Optional[Dict[int, Any]] = Field(
-        None, description="Search by custom field values: {field_id: value}"
+        default=None, description="Search by custom field values: {field_id: value}"
     )
 
     # === User-specific fields ===
-    role: Optional[List[Union[UserRole, str]]] = Field(None, description="User roles to search (OR logic)")
-    email: Optional[str] = Field(None, description="Search by user email")
-    name: Optional[str] = Field(None, description="Search by user/organization name")
-    phone: Optional[str] = Field(None, description="Search by user phone number")
-    is_verified: Optional[bool] = Field(None, description="Filter verified users")
-    is_suspended: Optional[bool] = Field(None, description="Filter suspended users")
-    external_id: Optional[str] = Field(None, description="Search by external ID")
-    notes: Optional[str] = Field(None, description="Search in user/org notes field")
-    details: Optional[str] = Field(None, description="Search in user/org details field")
+    role: Optional[List[Union[UserRole, str]]] = Field(default=None, description="User roles to search (OR logic)")
+    email: Optional[str] = Field(default=None, description="Search by user email")
+    name: Optional[str] = Field(default=None, description="Search by user/organization name")
+    phone: Optional[str] = Field(default=None, description="Search by user phone number")
+    is_verified: Optional[bool] = Field(default=None, description="Filter verified users")
+    is_suspended: Optional[bool] = Field(default=None, description="Filter suspended users")
+    external_id: Optional[str] = Field(default=None, description="Search by external ID")
+    notes: Optional[str] = Field(default=None, description="Search in user/org notes field")
+    details: Optional[str] = Field(default=None, description="Search in user/org details field")
 
     # === Sorting ===
     order_by: Optional[str] = Field(
-        None, description="Sort field (created_at, updated_at, priority, status, ticket_type)"
+        default=None, description="Sort field (created_at, updated_at, priority, status, ticket_type)"
     )
-    sort: Optional[SortOrder] = Field(None, description="Sort order (asc, desc)")
+    sort: Optional[SortOrder] = Field(default=None, description="Sort order (asc, desc)")
 
     # === Query limit ===
-    raw_query: Optional[str] = Field(None, description="Append raw query string for advanced use cases")
+    raw_query: Optional[str] = Field(default=None, description="Append raw query string for advanced use cases")
 
     @model_validator(mode="after")
     def validate_type_specific_fields(self) -> "SearchQueryConfig":

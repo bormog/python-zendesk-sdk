@@ -16,17 +16,19 @@ class Group(ZendeskModel):
     """
 
     # Read-only fields
-    id: Optional[int] = Field(None, description="Automatically assigned when creating groups")
-    url: Optional[str] = Field(None, description="The API url of the group")
-    default: Optional[bool] = Field(None, description="If the group is the default one for the account")
-    deleted: Optional[bool] = Field(None, description="Deleted groups get marked as such")
-    created_at: Optional[datetime] = Field(None, description="The time the group was created")
-    updated_at: Optional[datetime] = Field(None, description="The time of the last update of the group")
+    id: Optional[int] = Field(default=None, description="Automatically assigned when creating groups")
+    url: Optional[str] = Field(default=None, description="The API url of the group")
+    default: Optional[bool] = Field(default=None, description="If the group is the default one for the account")
+    deleted: Optional[bool] = Field(default=None, description="Deleted groups get marked as such")
+    created_at: Optional[datetime] = Field(default=None, description="The time the group was created")
+    updated_at: Optional[datetime] = Field(default=None, description="The time of the last update of the group")
 
     # Writable fields
     name: str = Field(..., description="The name of the group")
-    description: Optional[str] = Field(None, description="The description of the group")
-    is_public: Optional[bool] = Field(None, description="If true, the group is public. If false, the group is private")
+    description: Optional[str] = Field(default=None, description="The description of the group")
+    is_public: Optional[bool] = Field(
+        default=None, description="If true, the group is public. If false, the group is private"
+    )
 
     def __str__(self) -> str:
         """Human-readable string representation."""

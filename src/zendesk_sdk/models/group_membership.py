@@ -17,13 +17,15 @@ class GroupMembership(ZendeskModel):
     """
 
     # Read-only fields
-    id: Optional[int] = Field(None, description="Automatically assigned when creating memberships")
-    url: Optional[str] = Field(None, description="The API url of the membership")
+    id: Optional[int] = Field(default=None, description="Automatically assigned when creating memberships")
+    url: Optional[str] = Field(default=None, description="The API url of the membership")
     user_id: int = Field(..., description="The ID of the agent")
     group_id: int = Field(..., description="The ID of the group")
-    default: Optional[bool] = Field(None, description="If true, tickets assigned directly to the agent use this group")
-    created_at: Optional[datetime] = Field(None, description="The time the membership was created")
-    updated_at: Optional[datetime] = Field(None, description="The time of the last update")
+    default: Optional[bool] = Field(
+        default=None, description="If true, tickets assigned directly to the agent use this group"
+    )
+    created_at: Optional[datetime] = Field(default=None, description="The time the membership was created")
+    updated_at: Optional[datetime] = Field(default=None, description="The time of the last update")
 
     def __str__(self) -> str:
         """Human-readable string representation."""
