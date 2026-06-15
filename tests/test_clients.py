@@ -1052,6 +1052,30 @@ class TestTicketsClient:
 
         assert result == []
 
+    def test_extract_organizations_from_response(self):
+        """Sideloaded organizations are extracted into an id->Organization dict."""
+        client = self.get_client()
+        response = {
+            "organizations": [
+                {"id": 10, "name": "Org A"},
+                {"id": 20, "name": "Org B"},
+            ]
+        }
+
+        orgs = client._extract_organizations_from_response(response)
+
+        assert set(orgs.keys()) == {10, 20}
+        assert orgs[10].name == "Org A"
+
+    def test_extract_organizations_skips_missing_id(self):
+        """Organizations without an id are skipped."""
+        client = self.get_client()
+        response = {"organizations": [{"name": "No Id Org"}, {"id": 5, "name": "Org C"}]}
+
+        orgs = client._extract_organizations_from_response(response)
+
+        assert list(orgs.keys()) == [5]
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""

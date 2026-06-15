@@ -4,7 +4,7 @@ import asyncio
 from functools import cached_property
 from typing import TYPE_CHECKING, Any, AsyncIterator, Dict, List, Optional, Union
 
-from ..models import Comment, EnrichedTicket, Ticket, TicketField, User
+from ..models import Comment, EnrichedTicket, Organization, Ticket, TicketField, User
 from ..models.search import (
     SearchQueryConfig,
     SearchType,
@@ -712,6 +712,15 @@ class TicketsClient(BaseClient):
             if user.id is not None:
                 users[user.id] = user
         return users
+
+    def _extract_organizations_from_response(self, response: Dict[str, Any]) -> Dict[int, Organization]:
+        """Extract sideloaded organizations from API response."""
+        organizations: Dict[int, Organization] = {}
+        for org_data in response.get("organizations", []):
+            org = Organization(**org_data)
+            if org.id is not None:
+                organizations[org.id] = org
+        return organizations
 
     def _collect_user_ids_from_tickets(self, tickets: List[Ticket]) -> List[int]:
         """Collect all user IDs from a list of tickets."""
