@@ -1,6 +1,6 @@
 """Users API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from ..models import PasswordRequirements, User
 from ..pagination import ZendeskPaginator
@@ -55,12 +55,12 @@ class UsersClient(BaseClient):
         """Initialize UsersClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], User] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.user_maxsize if cache_config else 1000,
             ttl=cache_config.user_ttl if cache_config else 300,
         )
-        self.by_email: Callable[[str], Optional[User]] = self._create_cached_method(
+        self.by_email = self._create_cached_method(
             self._by_email_impl,
             maxsize=cache_config.user_maxsize if cache_config else 1000,
             ttl=cache_config.user_ttl if cache_config else 300,

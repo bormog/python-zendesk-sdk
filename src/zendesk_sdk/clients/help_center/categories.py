@@ -1,6 +1,6 @@
 """Help Center Categories API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ...models.help_center import Category
 from ...pagination import ZendeskPaginator
@@ -48,7 +48,7 @@ class CategoriesClient(HelpCenterBaseClient):
         """Initialize CategoriesClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], Category] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.category_maxsize if cache_config else 200,
             ttl=cache_config.category_ttl if cache_config else 1800,

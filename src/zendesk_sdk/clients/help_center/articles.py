@@ -1,6 +1,6 @@
 """Help Center Articles API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from ...models.help_center import Article
 from ...pagination import ZendeskPaginator
@@ -57,7 +57,7 @@ class ArticlesClient(HelpCenterBaseClient):
         """Initialize ArticlesClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], Article] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.article_maxsize if cache_config else 500,
             ttl=cache_config.article_ttl if cache_config else 900,

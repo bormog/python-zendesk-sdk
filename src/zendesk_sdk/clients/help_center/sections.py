@@ -1,6 +1,6 @@
 """Help Center Sections API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ...models.help_center import Section
 from ...pagination import ZendeskPaginator
@@ -52,7 +52,7 @@ class SectionsClient(HelpCenterBaseClient):
         """Initialize SectionsClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], Section] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.section_maxsize if cache_config else 200,
             ttl=cache_config.section_ttl if cache_config else 1800,

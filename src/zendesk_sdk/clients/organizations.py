@@ -1,6 +1,6 @@
 """Organizations API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from ..models import Organization
 from ..pagination import ZendeskPaginator
@@ -54,7 +54,7 @@ class OrganizationsClient(BaseClient):
         """Initialize OrganizationsClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], Organization] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.org_maxsize if cache_config else 500,
             ttl=cache_config.org_ttl if cache_config else 600,

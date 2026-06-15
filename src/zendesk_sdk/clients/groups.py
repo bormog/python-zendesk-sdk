@@ -1,6 +1,6 @@
 """Groups API client."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from ..models import Group, GroupMembership
 from ..pagination import ZendeskPaginator
@@ -59,7 +59,7 @@ class GroupsClient(BaseClient):
         """Initialize GroupsClient with optional caching."""
         super().__init__(http_client, cache_config)
         # Set up cached methods
-        self.get: Callable[[int], Group] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.group_maxsize if cache_config else 500,
             ttl=cache_config.group_ttl if cache_config else 600,

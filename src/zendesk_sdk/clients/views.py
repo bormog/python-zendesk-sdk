@@ -1,6 +1,6 @@
 """Views API client (read-only)."""
 
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Dict, List, Optional
 
 from ..models import Ticket, View, ViewCount
 from ..pagination import ZendeskPaginator
@@ -54,7 +54,7 @@ class ViewsClient(BaseClient):
         Zendesk already caches large views server-side.
         """
         super().__init__(http_client, cache_config)
-        self.get: Callable[[int], View] = self._create_cached_method(
+        self.get = self._create_cached_method(
             self._get_impl,
             maxsize=cache_config.view_maxsize if cache_config else 200,
             ttl=cache_config.view_ttl if cache_config else 900,
