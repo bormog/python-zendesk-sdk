@@ -1032,6 +1032,7 @@ class TestTicketsClient:
         with (
             patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict) as mock_get_many,
             patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value=mock_users),
+            patch.object(client, "_fetch_orgs_batch", new_callable=AsyncMock, return_value={}) as mock_fetch_orgs,
             patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
             patch.object(client, "_build_enriched_tickets", new_callable=AsyncMock, return_value=mock_enriched),
         ):
@@ -1042,6 +1043,8 @@ class TestTicketsClient:
             assert result[0].ticket.id == 1
             assert result[1].ticket.id == 2
             mock_get_many.assert_called_once_with([1, 2])
+            # org-fetch step must run (guards against silently dropping the organizations kwarg)
+            mock_fetch_orgs.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_get_many_enriched_empty(self):
@@ -1158,6 +1161,30 @@ class TestTicketsClient:
         assert enriched.organization.name == "Acme Inc"
         # sideload must request both users and organizations
         assert mock_get.call_args.kwargs["params"]["include"] == "users,organizations"
+
+    @pytest.mark.asyncio
+    async def test_get_enriched_missing_org_is_none(self):
+        """get_enriched: ticket has organization_id but the org is absent from the sideload (deleted) -> None."""
+        client = self.get_client()
+        ticket_response = {
+            "ticket": {
+                "id": 789,
+                "subject": "T",
+                "status": "open",
+                "requester_id": 100,
+                "organization_id": 99,
+            },
+            "users": [{"id": 100, "name": "Requester"}],
+            "organizations": [],  # org 99 not returned (e.g. deleted)
+        }
+        with (
+            patch.object(client, "_get", new_callable=AsyncMock, return_value=ticket_response),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+        ):
+            enriched = await client.get_enriched(789)
+
+        assert enriched.organization is None
 
     @pytest.mark.asyncio
     async def test_get_many_enriched_includes_organizations(self):

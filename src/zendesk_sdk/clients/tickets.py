@@ -738,6 +738,14 @@ class TicketsClient(BaseClient):
                 user_ids.update(ticket.follower_ids)
         return list(user_ids)
 
+    def _collect_org_ids_from_tickets(self, tickets: List[Ticket]) -> List[int]:
+        """Collect unique organization IDs from a list of tickets (skips tickets without one)."""
+        org_ids: set[int] = set()
+        for ticket in tickets:
+            if ticket.organization_id is not None:
+                org_ids.add(ticket.organization_id)
+        return list(org_ids)
+
     async def _fetch_users_batch(self, user_ids: List[int]) -> Dict[int, User]:
         """Fetch multiple users by IDs using show_many endpoint."""
         if not user_ids:
@@ -857,14 +865,14 @@ class TicketsClient(BaseClient):
         return enriched_tickets
 
     async def get_enriched(self, ticket_id: int) -> EnrichedTicket:
-        """Get a ticket with all related data: comments, users, and field definitions.
+        """Get a ticket with all related data: comments, users, organization, and field definitions.
 
         Fetches the ticket along with all its comments, resolves all related users
-        (requester, assignee, submitter, collaborators, comment authors), and loads
-        ticket field definitions for interpreting custom fields.
+        (requester, assignee, submitter, collaborators, comment authors), the ticket's
+        organization, and loads ticket field definitions for interpreting custom fields.
 
         This method makes multiple API calls in parallel for efficiency:
-        - Ticket with sideloaded users
+        - Ticket with sideloaded users and organization (one request, no extra call for the org)
         - All ticket comments with their authors
         - Ticket field definitions
 
@@ -876,6 +884,7 @@ class TicketsClient(BaseClient):
                 - ticket: The Ticket object
                 - comments: List of Comment objects
                 - users: Dict mapping user IDs to User objects
+                - organization: The ticket's Organization, or None if it has none
                 - fields: Dict mapping field IDs to TicketField definitions
 
         Example:
@@ -910,10 +919,11 @@ class TicketsClient(BaseClient):
         return await self._build_enriched_ticket(ticket, ticket_users, fields, organizations)
 
     async def get_many_enriched(self, ticket_ids: List[int]) -> List[EnrichedTicket]:
-        """Get multiple tickets with all related data: comments, users, and field definitions.
+        """Get multiple tickets with all related data: comments, users, organizations, and field definitions.
 
-        Batch-loads tickets, users, and fields in parallel, then fetches comments
-        for each ticket. Much more efficient than calling get_enriched() in a loop.
+        Batch-loads tickets and fields in parallel, then users and organizations
+        concurrently, then fetches comments for each ticket. Much more efficient
+        than calling get_enriched() in a loop.
 
         Args:
             ticket_ids: List of ticket IDs to fetch (max 100)
@@ -934,9 +944,12 @@ class TicketsClient(BaseClient):
 
         tickets = list(tickets_dict.values())
         user_ids = self._collect_user_ids_from_tickets(tickets)
-        org_ids = [oid for oid in (t.organization_id for t in tickets) if oid is not None]
-        ticket_users = await self._fetch_users_batch(user_ids)
-        organizations = await self._fetch_orgs_batch(org_ids)
+        org_ids = self._collect_org_ids_from_tickets(tickets)
+        # Users and organizations are independent batch calls — fetch concurrently
+        ticket_users, organizations = await asyncio.gather(
+            self._fetch_users_batch(user_ids),
+            self._fetch_orgs_batch(org_ids),
+        )
 
         return await self._build_enriched_tickets(tickets, ticket_users, fields, organizations)
 
@@ -999,11 +1012,13 @@ class TicketsClient(BaseClient):
         if not tickets:
             return
 
-        # Batch fetch users and organizations for all tickets in the batch
+        # Batch fetch users and organizations for all tickets in the batch (concurrently)
         user_ids = self._collect_user_ids_from_tickets(tickets)
-        ticket_users = await self._fetch_users_batch(user_ids)
-        org_ids = [oid for oid in (t.organization_id for t in tickets) if oid is not None]
-        organizations = await self._fetch_orgs_batch(org_ids)
+        org_ids = self._collect_org_ids_from_tickets(tickets)
+        ticket_users, organizations = await asyncio.gather(
+            self._fetch_users_batch(user_ids),
+            self._fetch_orgs_batch(org_ids),
+        )
 
         # Fetch comments and build enriched tickets
         enriched_list = await self._build_enriched_tickets(tickets, ticket_users, fields, organizations)
