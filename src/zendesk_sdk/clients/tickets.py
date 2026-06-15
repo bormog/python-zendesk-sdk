@@ -999,11 +999,13 @@ class TicketsClient(BaseClient):
         if not tickets:
             return
 
-        # Batch fetch users for all tickets
+        # Batch fetch users and organizations for all tickets in the batch
         user_ids = self._collect_user_ids_from_tickets(tickets)
         ticket_users = await self._fetch_users_batch(user_ids)
+        org_ids = [oid for oid in (t.organization_id for t in tickets) if oid is not None]
+        organizations = await self._fetch_orgs_batch(org_ids)
 
         # Fetch comments and build enriched tickets
-        enriched_list = await self._build_enriched_tickets(tickets, ticket_users, fields)
+        enriched_list = await self._build_enriched_tickets(tickets, ticket_users, fields, organizations)
         for enriched in enriched_list:
             yield enriched

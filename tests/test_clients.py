@@ -1238,6 +1238,28 @@ class TestTicketsClient:
                 await client.get_many_enriched([1])
 
 
+    @pytest.mark.asyncio
+    async def test_enrich_ticket_batch_distributes_organizations(self):
+        """_enrich_ticket_batch (search path) assigns each org to its ticket within the batch."""
+        client = self.get_client()
+        tickets = [
+            Ticket(id=1, subject="T1", requester_id=100, organization_id=10),
+            Ticket(id=2, subject="T2", requester_id=200, organization_id=20),
+        ]
+        org_response = {"organizations": [{"id": 10, "name": "Org A"}, {"id": 20, "name": "Org B"}]}
+
+        with (
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+            patch.object(client, "_get", new_callable=AsyncMock, return_value=org_response),
+        ):
+            result = [e async for e in client._enrich_ticket_batch(tickets, {})]
+
+        by_id = {e.ticket.id: e for e in result}
+        assert by_id[1].organization is not None and by_id[1].organization.id == 10
+        assert by_id[2].organization is not None and by_id[2].organization.id == 20
+
+
 class TestCommentsClient:
     """Test cases for CommentsClient."""
 
