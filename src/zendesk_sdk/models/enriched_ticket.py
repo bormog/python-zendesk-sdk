@@ -6,6 +6,7 @@ from pydantic import Field
 
 from .base import ZendeskModel
 from .comment import Comment
+from .organization import Organization
 from .ticket import Ticket, TicketField
 from .user import User
 
@@ -22,6 +23,7 @@ class EnrichedTicket(ZendeskModel):
         comments: All comments for this ticket
         users: Dictionary of all related users by their ID
         fields: Dictionary of all ticket field definitions by their ID
+        organization: The ticket's organization, if any
 
     Example:
         async with ZendeskClient(config) as client:
@@ -49,6 +51,9 @@ class EnrichedTicket(ZendeskModel):
     comments: List[Comment] = Field(default_factory=list, description="All comments for this ticket")
     users: Dict[int, User] = Field(default_factory=dict, description="All related users by ID")
     fields: Dict[int, TicketField] = Field(default_factory=dict, description="All ticket field definitions by ID")
+    organization: Optional[Organization] = Field(
+        default=None, description="The ticket's organization, if any"
+    )
 
     def get_user(self, user_id: Optional[int]) -> Optional[User]:
         """Get user by ID from loaded users.

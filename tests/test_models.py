@@ -499,6 +499,27 @@ class TestEnrichedTicketModel:
         assert len(enriched.comments) == 1
         assert len(enriched.users) == 2
 
+    def test_enriched_ticket_organization_default_none(self):
+        """organization defaults to None when not provided."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", requester_id=123)
+        enriched = EnrichedTicket(ticket=ticket)
+
+        assert enriched.organization is None
+
+    def test_enriched_ticket_with_organization(self):
+        """organization is stored when provided."""
+        from zendesk_sdk.models import EnrichedTicket
+
+        ticket = Ticket(id=789, subject="Test", requester_id=123, organization_id=42)
+        org = Organization(id=42, name="Acme Inc")
+        enriched = EnrichedTicket(ticket=ticket, organization=org)
+
+        assert enriched.organization is not None
+        assert enriched.organization.id == 42
+        assert enriched.organization.name == "Acme Inc"
+
     def test_enriched_ticket_get_user(self):
         """Test get_user method."""
         from zendesk_sdk.models import EnrichedTicket
