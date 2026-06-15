@@ -1,14 +1,21 @@
 """Base client class for all Zendesk API clients."""
 
-from typing import TYPE_CHECKING, Any, Callable, Dict, Optional, TypeVar
+import sys
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Dict, Optional, TypeVar
 
 from async_lru import alru_cache
+
+if sys.version_info >= (3, 10):
+    from typing import ParamSpec
+else:
+    from typing_extensions import ParamSpec
 
 if TYPE_CHECKING:
     from ..config import CacheConfig
     from ..http_client import HTTPClient
 
-T = TypeVar("T")
+P = ParamSpec("P")
+R = TypeVar("R")
 
 
 class BaseClient:
@@ -43,10 +50,10 @@ class BaseClient:
 
     def _create_cached_method(
         self,
-        method: Callable[..., T],
+        method: Callable[P, Coroutine[Any, Any, R]],
         maxsize: int,
         ttl: int,
-    ) -> Callable[..., T]:
+    ) -> Callable[P, Coroutine[Any, Any, R]]:
         """Create a cached version of an async method.
 
         If caching is disabled, returns the original method unchanged.
