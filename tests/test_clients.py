@@ -1131,6 +1131,34 @@ class TestTicketsClient:
         assert by_id[2].organization is not None and by_id[2].organization.id == 20
         assert by_id[3].organization is None
 
+    @pytest.mark.asyncio
+    async def test_get_enriched_includes_organization(self):
+        """get_enriched sideloads the organization via include=users,organizations."""
+        client = self.get_client()
+        ticket_response = {
+            "ticket": {
+                "id": 789,
+                "subject": "T",
+                "status": "open",
+                "requester_id": 100,
+                "organization_id": 42,
+            },
+            "users": [{"id": 100, "name": "Requester"}],
+            "organizations": [{"id": 42, "name": "Acme Inc"}],
+        }
+        with (
+            patch.object(client, "_get", new_callable=AsyncMock, return_value=ticket_response) as mock_get,
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+        ):
+            enriched = await client.get_enriched(789)
+
+        assert enriched.organization is not None
+        assert enriched.organization.id == 42
+        assert enriched.organization.name == "Acme Inc"
+        # sideload must request both users and organizations
+        assert mock_get.call_args.kwargs["params"]["include"] == "users,organizations"
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""

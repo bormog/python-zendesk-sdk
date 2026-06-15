@@ -899,14 +899,15 @@ class TicketsClient(BaseClient):
                 if field_def:
                     print(f"{field_def.title}: {custom_field.value}")
         """
-        # Fetch ticket with users and fields in parallel
-        ticket_task = self._get(f"tickets/{ticket_id}.json", params={"include": "users"})
+        # Fetch ticket with sideloaded users + organizations, and fields, in parallel
+        ticket_task = self._get(f"tickets/{ticket_id}.json", params={"include": "users,organizations"})
         fields_task = self._fetch_fields()
         response, fields = await asyncio.gather(ticket_task, fields_task)
 
         ticket = Ticket(**response["ticket"])
         ticket_users = self._extract_users_from_response(response)
-        return await self._build_enriched_ticket(ticket, ticket_users, fields)
+        organizations = self._extract_organizations_from_response(response)
+        return await self._build_enriched_ticket(ticket, ticket_users, fields, organizations)
 
     async def get_many_enriched(self, ticket_ids: List[int]) -> List[EnrichedTicket]:
         """Get multiple tickets with all related data: comments, users, and field definitions.
