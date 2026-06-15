@@ -1076,6 +1076,29 @@ class TestTicketsClient:
 
         assert list(orgs.keys()) == [5]
 
+    @pytest.mark.asyncio
+    async def test_fetch_orgs_batch_empty_no_http(self):
+        """Empty id list returns {} without an HTTP request."""
+        client = self.get_client()
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            result = await client._fetch_orgs_batch([])
+
+            assert result == {}
+            mock_get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_fetch_orgs_batch_requests_show_many(self):
+        """Org IDs are deduplicated and fetched via organizations/show_many.json."""
+        client = self.get_client()
+        response = {"organizations": [{"id": 10, "name": "Org A"}, {"id": 20, "name": "Org B"}]}
+        with patch.object(client, "_get", new_callable=AsyncMock, return_value=response) as mock_get:
+            result = await client._fetch_orgs_batch([10, 20, 10])
+
+            assert set(result.keys()) == {10, 20}
+            mock_get.assert_called_once()
+            call_url = mock_get.call_args[0][0]
+            assert call_url.startswith("organizations/show_many.json?ids=")
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""

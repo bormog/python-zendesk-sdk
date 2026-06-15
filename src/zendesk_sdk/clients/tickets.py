@@ -749,6 +749,22 @@ class TicketsClient(BaseClient):
         response = await self._get(f"users/show_many.json?ids={ids_param}")
         return self._extract_users_from_response(response)
 
+    async def _fetch_orgs_batch(self, org_ids: List[int]) -> Dict[int, Organization]:
+        """Fetch multiple organizations by IDs using show_many endpoint.
+
+        Mirrors _fetch_users_batch: empty list -> {} with no request, dedup, max 100 per
+        request, HTTP errors propagate (not swallowed). A missing/deleted org simply does
+        not appear in the response, so the builder resolves it to None.
+        """
+        if not org_ids:
+            return {}
+
+        unique_ids = list(set(org_ids))[:100]
+        ids_param = ",".join(str(oid) for oid in unique_ids)
+
+        response = await self._get(f"organizations/show_many.json?ids={ids_param}")
+        return self._extract_organizations_from_response(response)
+
     async def _fetch_comments_with_users(self, ticket_id: int) -> tuple[List[Comment], Dict[int, User]]:
         """Fetch comments for a ticket with sideloaded users."""
         response = await self._get(f"tickets/{ticket_id}/comments.json", params={"include": "users"})
