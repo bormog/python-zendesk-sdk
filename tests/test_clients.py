@@ -1099,6 +1099,38 @@ class TestTicketsClient:
             call_url = mock_get.call_args[0][0]
             assert call_url.startswith("organizations/show_many.json?ids=")
 
+    @pytest.mark.asyncio
+    async def test_build_enriched_ticket_sets_organization(self):
+        """Single-ticket builder resolves organization by organization_id."""
+        client = self.get_client()
+        ticket = Ticket(id=1, subject="T1", requester_id=100, organization_id=10)
+        organizations = {10: Organization(id=10, name="Org A")}
+
+        with patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})):
+            result = await client._build_enriched_ticket(ticket, {}, fields={}, organizations=organizations)
+
+        assert result.organization is not None
+        assert result.organization.id == 10
+
+    @pytest.mark.asyncio
+    async def test_build_enriched_tickets_matches_organization(self):
+        """Each ticket gets the organization matching its organization_id; None when missing."""
+        client = self.get_client()
+        tickets = [
+            Ticket(id=1, subject="T1", requester_id=100, organization_id=10),
+            Ticket(id=2, subject="T2", requester_id=200, organization_id=20),
+            Ticket(id=3, subject="T3", requester_id=300),  # no organization_id
+        ]
+        organizations = {10: Organization(id=10, name="Org A"), 20: Organization(id=20, name="Org B")}
+
+        with patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})):
+            result = await client._build_enriched_tickets(tickets, {}, fields={}, organizations=organizations)
+
+        by_id = {e.ticket.id: e for e in result}
+        assert by_id[1].organization is not None and by_id[1].organization.id == 10
+        assert by_id[2].organization is not None and by_id[2].organization.id == 20
+        assert by_id[3].organization is None
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""

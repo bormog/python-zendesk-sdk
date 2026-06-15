@@ -781,11 +781,21 @@ class TicketsClient(BaseClient):
                 fields[field.id] = field
         return fields
 
+    def _resolve_organization(
+        self, ticket: Ticket, organizations: Optional[Dict[int, Organization]]
+    ) -> Optional[Organization]:
+        """Resolve a ticket's organization from a loaded dict (None-safe)."""
+        org_id = ticket.organization_id
+        if not organizations or org_id is None:
+            return None
+        return organizations.get(org_id)
+
     async def _build_enriched_ticket(
         self,
         ticket: Ticket,
         ticket_users: Dict[int, User],
         fields: Optional[Dict[int, TicketField]] = None,
+        organizations: Optional[Dict[int, Organization]] = None,
     ) -> EnrichedTicket:
         """Build EnrichedTicket by fetching comments and merging users."""
         if ticket.id is None:
@@ -797,6 +807,7 @@ class TicketsClient(BaseClient):
             comments=comments,
             users=all_users,
             fields=fields or {},
+            organization=self._resolve_organization(ticket, organizations),
         )
 
     async def _build_enriched_tickets(
@@ -804,6 +815,7 @@ class TicketsClient(BaseClient):
         tickets: List[Ticket],
         ticket_users: Dict[int, User],
         fields: Optional[Dict[int, TicketField]] = None,
+        organizations: Optional[Dict[int, Organization]] = None,
     ) -> List[EnrichedTicket]:
         """Build list of EnrichedTicket by fetching comments in parallel."""
         if not tickets:
@@ -838,6 +850,7 @@ class TicketsClient(BaseClient):
                     comments=comments,
                     users=all_users,
                     fields=fields or {},
+                    organization=self._resolve_organization(ticket, organizations),
                 )
             )
 
