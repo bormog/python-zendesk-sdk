@@ -1237,7 +1237,6 @@ class TestTicketsClient:
             with pytest.raises(ZendeskRateLimitException):
                 await client.get_many_enriched([1])
 
-
     @pytest.mark.asyncio
     async def test_enrich_ticket_batch_distributes_organizations(self):
         """_enrich_ticket_batch (search path) assigns each org to its ticket within the batch."""
