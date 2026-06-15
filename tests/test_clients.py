@@ -1159,6 +1159,84 @@ class TestTicketsClient:
         # sideload must request both users and organizations
         assert mock_get.call_args.kwargs["params"]["include"] == "users,organizations"
 
+    @pytest.mark.asyncio
+    async def test_get_many_enriched_includes_organizations(self):
+        """get_many_enriched matches organizations to tickets via show_many."""
+        client = self.get_client()
+        tickets_dict = {
+            1: Ticket(id=1, subject="T1", status="open", requester_id=100, organization_id=10),
+            2: Ticket(id=2, subject="T2", status="open", requester_id=200, organization_id=20),
+        }
+        org_response = {"organizations": [{"id": 10, "name": "Org A"}, {"id": 20, "name": "Org B"}]}
+
+        with (
+            patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+            patch.object(client, "_get", new_callable=AsyncMock, return_value=org_response) as mock_get,
+        ):
+            result = await client.get_many_enriched([1, 2])
+
+        by_id = {e.ticket.id: e for e in result}
+        assert by_id[1].organization is not None and by_id[1].organization.id == 10
+        assert by_id[2].organization is not None and by_id[2].organization.id == 20
+        assert mock_get.call_args[0][0].startswith("organizations/show_many.json?ids=")
+
+    @pytest.mark.asyncio
+    async def test_get_many_enriched_no_org_id_skips_http(self):
+        """Tickets without organization_id yield organization=None and trigger no org request."""
+        client = self.get_client()
+        tickets_dict = {1: Ticket(id=1, subject="T1", status="open", requester_id=100)}
+
+        with (
+            patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+            patch.object(client, "_get", new_callable=AsyncMock) as mock_get,
+        ):
+            result = await client.get_many_enriched([1])
+
+        assert result[0].organization is None
+        mock_get.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_many_enriched_missing_org_is_none(self):
+        """An organization_id whose org is absent from show_many resolves to None (deleted org)."""
+        client = self.get_client()
+        tickets_dict = {1: Ticket(id=1, subject="T1", status="open", requester_id=100, organization_id=99)}
+        org_response = {"organizations": []}  # org 99 not returned
+
+        with (
+            patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+            patch.object(client, "_get", new_callable=AsyncMock, return_value=org_response),
+        ):
+            result = await client.get_many_enriched([1])
+
+        assert result[0].organization is None
+
+    @pytest.mark.asyncio
+    async def test_get_many_enriched_org_http_error_propagates(self):
+        """An HTTP error from the org show_many request is not swallowed."""
+        from zendesk_sdk.exceptions import ZendeskRateLimitException
+
+        client = self.get_client()
+        tickets_dict = {1: Ticket(id=1, subject="T1", status="open", requester_id=100, organization_id=10)}
+
+        with (
+            patch.object(client, "get_many", new_callable=AsyncMock, return_value=tickets_dict),
+            patch.object(client, "_fetch_fields", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_users_batch", new_callable=AsyncMock, return_value={}),
+            patch.object(client, "_fetch_comments_with_users", new_callable=AsyncMock, return_value=([], {})),
+            patch.object(client, "_get", new_callable=AsyncMock, side_effect=ZendeskRateLimitException("429")),
+        ):
+            with pytest.raises(ZendeskRateLimitException):
+                await client.get_many_enriched([1])
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""

@@ -934,9 +934,11 @@ class TicketsClient(BaseClient):
 
         tickets = list(tickets_dict.values())
         user_ids = self._collect_user_ids_from_tickets(tickets)
+        org_ids = [oid for oid in (t.organization_id for t in tickets) if oid is not None]
         ticket_users = await self._fetch_users_batch(user_ids)
+        organizations = await self._fetch_orgs_batch(org_ids)
 
-        return await self._build_enriched_tickets(tickets, ticket_users, fields)
+        return await self._build_enriched_tickets(tickets, ticket_users, fields, organizations)
 
     async def search_enriched(
         self,
