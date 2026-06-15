@@ -960,8 +960,9 @@ class TicketsClient(BaseClient):
     ) -> AsyncIterator[EnrichedTicket]:
         """Search for tickets and load all related data with automatic pagination.
 
-        Note: This method makes N+1 API calls per ticket (fetching comments).
-        Users are batched for efficiency.
+        Each yielded ticket is enriched with its comments, related users, organization,
+        and field definitions. Note: this method makes N+1 API calls per ticket (fetching
+        comments). Users and organizations are batched per page for efficiency.
 
         Args:
             query: SearchQueryConfig or raw query string

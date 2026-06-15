@@ -37,6 +37,10 @@ class EnrichedTicket(ZendeskModel):
             print(f"Requester: {enriched.requester.name}")
             print(f"Assignee: {enriched.assignee.name if enriched.assignee else 'Unassigned'}")
 
+            # Access the ticket's organization (None if it has none)
+            if enriched.organization:
+                print(f"Organization: {enriched.organization.name}")
+
             # Iterate over comments with authors
             for comment in enriched.comments:
                 author = enriched.get_comment_author(comment)

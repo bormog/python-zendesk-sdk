@@ -1,9 +1,10 @@
 """Enriched tickets example for Zendesk SDK.
 
 This example demonstrates:
-- Loading tickets with all related data (comments, users, field definitions)
+- Loading tickets with all related data (comments, users, organization, field definitions)
 - Batch loading multiple enriched tickets with get_many_enriched()
 - Using EnrichedTicket for efficient data access
+- Accessing the ticket's organization (sideloaded, no extra request)
 - Accessing custom field values with human-readable names
 - Minimizing API requests with batch loading
 """
@@ -24,7 +25,7 @@ async def main() -> None:
         # ==================== Single enriched ticket ====================
 
         # Get a single ticket with all related data
-        # This makes 2 parallel API calls: ticket (with users) + fields
+        # This makes 2 parallel API calls: ticket (with sideloaded users + organization) + fields
         # Then fetches comments
         enriched = await client.tickets.get_enriched(12345)
 
@@ -42,6 +43,16 @@ async def main() -> None:
             print(f"Assignee: {assignee.name}")
         else:
             print("Ticket is unassigned")
+
+        # ==================== Organization ====================
+
+        # The ticket's organization is sideloaded with the ticket (no extra request).
+        # It is None when the ticket has no organization assigned.
+        organization = enriched.organization
+        if organization:
+            print(f"Organization: {organization.name}")
+        else:
+            print("Ticket has no organization")
 
         # ==================== Custom field values ====================
 
@@ -68,7 +79,8 @@ async def main() -> None:
         if result:
             comment, author = result
             author_name = author.name if author else "Unknown"
-            print(f"\nLast comment by {author_name}: {comment.body[:80]}")
+            body_preview = comment.body[:80] if comment.body else "(no body)"
+            print(f"\nLast comment by {author_name}: {body_preview}")
 
         # ==================== Comments with authors ====================
 
@@ -87,7 +99,8 @@ async def main() -> None:
         # Load multiple tickets with all related data at once
         # Much more efficient than calling get_enriched() in a loop:
         # - 1 API call for all tickets (show_many)
-        # - 1 API call for all users (show_many)
+        # - 1 API call for all users (show_many), concurrent with...
+        # - 1 API call for all organizations (show_many)
         # - 1 API call for field definitions
         # - N parallel API calls for comments (one per ticket)
         ticket_ids = [12345, 12346, 12347]
@@ -97,6 +110,7 @@ async def main() -> None:
         for item in enriched_list:
             print(f"  #{item.ticket.id}: {item.ticket.subject}")
             print(f"    Requester: {item.requester.name if item.requester else 'N/A'}")
+            print(f"    Organization: {item.organization.name if item.organization else 'N/A'}")
             print(f"    Comments: {len(item.comments)}")
 
         # ==================== Search with enrichment ====================

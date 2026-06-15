@@ -376,7 +376,7 @@ Metrics are live data — the client intentionally does not cache responses.
 
 ### Enriched Tickets
 
-Load tickets with all related data (comments, users, field definitions) in minimum API requests:
+Load tickets with all related data (comments, users, organization, field definitions) in minimum API requests:
 
 ```python
 from zendesk_sdk import SearchQueryConfig
@@ -390,6 +390,10 @@ enriched_list = await client.tickets.get_many_enriched([12345, 12346, 12347])
 print(f"Ticket: {enriched.ticket.subject}")
 print(f"Requester: {enriched.requester.name}")
 print(f"Assignee: {enriched.assignee.name if enriched.assignee else 'Unassigned'}")
+
+# Organization is sideloaded with the ticket — no extra API call
+if enriched.organization:
+    print(f"Organization: {enriched.organization.name}")
 
 for comment in enriched.comments:
     author = enriched.get_comment_author(comment)
