@@ -498,6 +498,21 @@ class TestZendeskPaginator:
         items = paginator._extract_items(response)
         assert items == [{"id": 1, "updated_at": "2023-01-01T00:00:00Z"}]
 
+    def test_create_ticket_comments_paginator_includes_inline_images(self):
+        """Ticket comments paginator requests inline images by default."""
+        http_client = Mock()
+        paginator = ZendeskPaginator.create_ticket_comments_paginator(http_client, 123)
+
+        assert isinstance(paginator, OffsetPaginator)
+        assert paginator.path == "tickets/123/comments.json"
+        assert paginator.params == {"include_inline_images": "true"}
+        # The flag is merged into every outgoing page request:
+        assert paginator._build_page_params() == {
+            "include_inline_images": "true",
+            "page": 1,
+            "per_page": 100,
+        }
+
 
 class TestTotalCountAndCount:
     """Tests for total_count property and async count() method."""

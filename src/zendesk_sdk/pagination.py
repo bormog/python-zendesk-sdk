@@ -572,7 +572,11 @@ class ZendeskPaginator:
                 return [Comment(**c) for c in response.get("comments", [])]
 
         return TicketCommentsPaginator(
-            http_client, f"tickets/{ticket_id}/comments.json", per_page=per_page, limit=limit
+            http_client,
+            f"tickets/{ticket_id}/comments.json",
+            params={"include_inline_images": "true"},
+            per_page=per_page,
+            limit=limit,
         )
 
     @staticmethod

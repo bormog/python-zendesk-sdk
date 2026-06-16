@@ -41,6 +41,7 @@ class CommentsClient(BaseClient):
 
         Retrieves all comments (both public and private) for a ticket in
         chronological order. Use async iteration to process comments.
+        Inline (in-body) images are included in each comment's ``attachments``.
 
         Args:
             ticket_id: The ticket's ID
@@ -66,6 +67,7 @@ class CommentsClient(BaseClient):
 
         Efficiently fetches only the most recent comment using sort_order=desc
         and per_page=1, with sideloaded user data for the comment author.
+        Inline (in-body) images are included in the comment's ``attachments``.
 
         Args:
             ticket_id: The ticket's ID
@@ -81,7 +83,7 @@ class CommentsClient(BaseClient):
         """
         response = await self._get(
             f"tickets/{ticket_id}/comments.json",
-            params={"sort_order": "desc", "per_page": 1, "include": "users"},
+            params={"sort_order": "desc", "per_page": 1, "include": "users", "include_inline_images": "true"},
         )
         comments = response.get("comments", [])
         if not comments:
@@ -775,7 +777,10 @@ class TicketsClient(BaseClient):
 
     async def _fetch_comments_with_users(self, ticket_id: int) -> tuple[List[Comment], Dict[int, User]]:
         """Fetch comments for a ticket with sideloaded users."""
-        response = await self._get(f"tickets/{ticket_id}/comments.json", params={"include": "users"})
+        response = await self._get(
+            f"tickets/{ticket_id}/comments.json",
+            params={"include": "users", "include_inline_images": "true"},
+        )
         comments = [Comment(**c) for c in response.get("comments", [])]
         users = self._extract_users_from_response(response)
         return comments, users
@@ -876,6 +881,8 @@ class TicketsClient(BaseClient):
         - All ticket comments with their authors
         - Ticket field definitions
 
+        Each comment's ``attachments`` include inline (in-body) images by default.
+
         Args:
             ticket_id: The ticket's ID
 
@@ -924,6 +931,8 @@ class TicketsClient(BaseClient):
         Batch-loads tickets and fields in parallel, then users and organizations
         concurrently, then fetches comments for each ticket. Much more efficient
         than calling get_enriched() in a loop.
+
+        Each comment's ``attachments`` include inline (in-body) images by default.
 
         Args:
             ticket_ids: List of ticket IDs to fetch (max 100)

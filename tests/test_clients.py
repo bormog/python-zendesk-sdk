@@ -1285,6 +1285,18 @@ class TestTicketsClient:
         assert by_id[1].organization is not None and by_id[1].organization.id == 10
         assert by_id[2].organization is not None and by_id[2].organization.id == 20
 
+    @pytest.mark.asyncio
+    async def test_fetch_comments_with_users_requests_inline_images(self):
+        """_fetch_comments_with_users must request inline images by default."""
+        client = self.get_client()
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = {"comments": [], "users": []}
+            await client._fetch_comments_with_users(123)
+            mock_get.assert_called_once_with(
+                "tickets/123/comments.json",
+                params={"include": "users", "include_inline_images": "true"},
+            )
+
 
 class TestCommentsClient:
     """Test cases for CommentsClient."""
@@ -1375,6 +1387,23 @@ class TestCommentsClient:
             mock_put.assert_called_once_with(
                 "tickets/789/comments/111/redact.json",
                 json={"text": "secret"},
+            )
+
+    @pytest.mark.asyncio
+    async def test_get_last_requests_inline_images(self):
+        """get_last must request inline images by default."""
+        client = self.get_client()
+        with patch.object(client, "_get", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = {"comments": []}
+            await client.get_last(123)
+            mock_get.assert_called_once_with(
+                "tickets/123/comments.json",
+                params={
+                    "sort_order": "desc",
+                    "per_page": 1,
+                    "include": "users",
+                    "include_inline_images": "true",
+                },
             )
 
 

@@ -327,6 +327,8 @@ if result:
     print(f"{author.name}: {comment.body}")
 ```
 
+Inline (in-body) images embedded in a comment are returned in `comment.attachments` by default (flagged with `attachment.inline is True`) — both via `list`/`get_last` and via enriched tickets.
+
 ### Tags (nested under tickets)
 ```python
 tags = await client.tickets.tags.get(ticket_id)           # Get tags
