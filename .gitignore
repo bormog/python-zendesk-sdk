@@ -68,8 +68,8 @@ instance/
 # Scrapy stuff:
 .scrapy
 
-# Sphinx documentation
-docs/_build/
+# Documentation
+docs/
 
 # PyBuilder
 .pybuilder/
@@ -191,6 +191,3 @@ debug_*.py
 # Local directories
 .claude/
 CLAUDE.md
-# Note: `llm/` is excluded via .git/info/exclude (local git-ignore not committed)
-# so Claude Code can still see it via @-autocomplete, which honors .gitignore
-# but not .git/info/exclude.
